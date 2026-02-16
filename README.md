@@ -51,6 +51,7 @@ To improve visibility, organization, and efficiency in the occasional job applic
 
 The project follows a **feature-based architecture** with clear separation of concerns.
 
+```
 lib/
 ├── app/ # App configuration and routing
 │ ├── app.dart
@@ -88,7 +89,7 @@ lib/
 │
 └── main.dart
 
-
+```
 
 ---
 
@@ -144,15 +145,20 @@ The frontend is developed using a **mock-first approach**.
 ## 🚀 Getting Started
 
 ### 1️⃣ Clone the repository
+```
 git clone https://github.com/Moviles202620/Flutter-G25.git
-
+```
 
 ### 2️⃣ Install dependencies
+```
 flutter pub get
+```
 
 
 ### 3️⃣ Run the app
+```
 flutter run
+```
 
 
 ---
