@@ -1,0 +1,293 @@
+import 'package:flutter/material.dart';
+import '../../../app/theme.dart';
+import '../../../models/application_model.dart';
+import 'application_detail_page.dart';
+import 'package:provider/provider.dart';
+import '../../../data/app_state.dart';
+
+
+class StaffHomePage extends StatelessWidget {
+  const StaffHomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final apps = context.watch<AppState>().pendingApplications;
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: AppColors.surface,
+        elevation: 0,
+        leadingWidth: 64,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 14),
+          child: Image.asset('assets/logo.png', fit: BoxFit.contain),
+        ),
+        title: const Text(
+          'Home',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: Stack(
+              children: [
+                const Icon(Icons.notifications_none_rounded, size: 28),
+                Positioned(
+                  right: 2,
+                  top: 2,
+                  child: Container(
+                    width: 9,
+                    height: 9,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      body: apps.isEmpty ? const _EmptyState() : _HomeWithApps(apps: apps),
+    );
+  }
+}
+
+class _HomeWithApps extends StatelessWidget {
+  final List<ApplicationModel> apps;
+  const _HomeWithApps({required this.apps});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        _ActivitySummaryCard(
+          pendingCount: apps.where((a) => a.status == ApplicationStatus.pending).length,
+          activeOffers: 2,
+        ),
+        const SizedBox(height: 18),
+
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: const [
+            Text('Aplicaciones recientes', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            Text('Ver todas', style: TextStyle(color: AppColors.primaryYellow, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        ...apps.map((a) => Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => ApplicationDetailPage(app: a)),
+              );
+            },
+            child: _ApplicationCard(app: a),
+          ),
+        )),
+      ],
+    );
+  }
+}
+
+class _ActivitySummaryCard extends StatelessWidget {
+  final int pendingCount;
+  final int activeOffers;
+
+  const _ActivitySummaryCard({
+    required this.pendingCount,
+    required this.activeOffers,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'RESUMEN DE ACTIVIDAD',
+            style: TextStyle(letterSpacing: 1.4, color: Color(0xFF9AA4B2), fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _Metric(
+                  value: pendingCount.toString(),
+                  label: 'Aplicaciones pendientes',
+                ),
+              ),
+              Container(width: 1, height: 50, color: AppColors.border),
+              Expanded(
+                child: _Metric(
+                  value: activeOffers.toString(),
+                  label: 'Ofertas activas',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _Metric({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(value, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(color: AppColors.greyText, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApplicationCard extends StatelessWidget {
+  final ApplicationModel app;
+  const _ApplicationCard({required this.app});
+
+  @override
+  Widget build(BuildContext context) {
+    final statusText = switch (app.status) {
+      ApplicationStatus.pending => 'PENDIENTE',
+      ApplicationStatus.accepted => 'ACEPTADA',
+      ApplicationStatus.rejected => 'RECHAZADA',
+    };
+
+    final statusColor = switch (app.status) {
+      ApplicationStatus.pending => const Color(0xFF9AA4B2),
+      ApplicationStatus.accepted => AppColors.success,
+      ApplicationStatus.rejected => AppColors.danger,
+    };
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.primaryYellow.withOpacity(0.15),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.primaryYellow.withOpacity(0.35)),
+            ),
+            child: Center(
+              child: Text(
+                app.applicantInitials,
+                style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF9A5B00)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(app.applicantName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 2),
+                Text(app.offerTitle, style: const TextStyle(color: AppColors.greyText, fontSize: 16)),
+              ],
+            ),
+          ),
+          Text(statusText, style: TextStyle(fontWeight: FontWeight.w900, color: statusColor)),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
+      child: Column(
+        children: [
+          const SizedBox(height: 70),
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.border),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 14,
+                  offset: Offset(0, 8),
+                  color: Color(0x12000000),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.inbox_outlined, size: 46, color: Color(0xFFB6BFCC)),
+          ),
+          const SizedBox(height: 22),
+          const Text(
+            'Todavía no hay aplicaciones',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Cuando los estudiantes apliquen,\naparecerán aquí.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18, color: AppColors.greyText, height: 1.35),
+          ),
+          const SizedBox(height: 22),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: () {},
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryYellow,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.add, size: 22),
+              label: const Text(
+                'Crear una oferta',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
