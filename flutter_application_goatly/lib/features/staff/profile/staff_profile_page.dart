@@ -16,9 +16,13 @@ class StaffProfilePage extends StatelessWidget {
     final user = state.user;
 
     final accepted = state.acceptedApplications;
+    
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -89,9 +93,7 @@ class StaffProfilePage extends StatelessWidget {
                       text: 'Configuración',
                       filled: false,
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Configuración (pendiente Sprint 2)')),
-                        );
+                        Navigator.pushNamed(context, Routes.settings);
                       },
                     ),
                   ),
@@ -100,7 +102,7 @@ class StaffProfilePage extends StatelessWidget {
             ),
 
             const SizedBox(height: 14),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: borderColor),
 
             // Stats (dinámico)
             Padding(
@@ -142,9 +144,9 @@ class StaffProfilePage extends StatelessWidget {
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: surfaceColor,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: borderColor),
                 ),
                 child: Column(
                   children: [
@@ -172,7 +174,7 @@ class StaffProfilePage extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const Divider(height: 1, color: AppColors.border),
+                    Divider(height: 1, color: borderColor),
 
                     if (accepted.isEmpty)
                       const Padding(
@@ -220,6 +222,9 @@ class StaffProfilePage extends StatelessWidget {
   }
 
   List<Widget> _buildAcceptedList(BuildContext context, List<ApplicationModel> accepted) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+
     return accepted
         .map(
           (a) => Column(
@@ -235,7 +240,7 @@ class StaffProfilePage extends StatelessWidget {
                   );
                 },
               ),
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: borderColor),
             ],
           ),
         )
@@ -256,8 +261,9 @@ class _SoftButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = filled ? AppColors.primaryYellow.withOpacity(0.2) : Colors.white;
-    final border = filled ? Colors.transparent : AppColors.border;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = filled ? AppColors.primaryYellow.withOpacity(0.2) : (isDark ? AppColors.darkSurface : Colors.white);
+    final border = filled ? Colors.transparent : (isDark ? AppColors.darkBorder : AppColors.border);
     final color = filled ? const Color(0xFF9A5B00) : AppColors.greyText;
 
     return SizedBox(
@@ -289,12 +295,16 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,

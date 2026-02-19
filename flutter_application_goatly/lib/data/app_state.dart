@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../models/offer_model.dart';
 import '../models/application_model.dart';
-import '../mock_data/departments.dart';
 
 class AppState extends ChangeNotifier {
   UserModel? _user;

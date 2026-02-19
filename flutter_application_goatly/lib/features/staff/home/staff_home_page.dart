@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../app/theme.dart';
+import '../../../app/localization.dart';
 import '../../../models/application_model.dart';
 import 'application_detail_page.dart';
 import 'package:provider/provider.dart';
 import '../../../data/app_state.dart';
+import '../../../data/settings_state.dart';
 
 
 class StaffHomePage extends StatelessWidget {
@@ -12,20 +14,25 @@ class StaffHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final apps = context.watch<AppState>().pendingApplications;
+    context.watch<SettingsState>(); // Escuchar cambios de idioma y tema
+    
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final appBarBg = isDark ? AppColors.darkSurface : AppColors.surface;
+    
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: AppColors.surface,
+        backgroundColor: appBarBg,
+        surfaceTintColor: appBarBg,
         elevation: 0,
         leadingWidth: 40,
         leading: Padding(
           padding: const EdgeInsets.only(left: 8),
           child: Image.asset('assets/logo.png', fit: BoxFit.contain),
         ),
-        title: const Text(
-          'Home',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          context.t('home'),
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         centerTitle: true,
         actions: [
@@ -62,20 +69,33 @@ class _HomeWithApps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<SettingsState>(); // Escuchar cambios
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
         _ActivitySummaryCard(
           pendingCount: apps.where((a) => a.status == ApplicationStatus.pending).length,
           activeOffers: 2,
+          surfaceColor: surfaceColor,
+          borderColor: borderColor,
         ),
         const SizedBox(height: 18),
 
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: const [
-            Text('Aplicaciones recientes', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-            Text('Ver todas', style: TextStyle(color: AppColors.primaryYellow, fontWeight: FontWeight.w700)),
+          children: [
+            Text(
+              context.t('recent_applications'),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            Text(
+              context.t('view_all'),
+              style: const TextStyle(color: AppColors.primaryYellow, fontWeight: FontWeight.w700),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -90,7 +110,11 @@ class _HomeWithApps extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => ApplicationDetailPage(app: a)),
               );
             },
-            child: _ApplicationCard(app: a),
+            child: _ApplicationCard(
+              app: a,
+              surfaceColor: surfaceColor,
+              borderColor: borderColor,
+            ),
           ),
         )),
       ],
@@ -101,20 +125,26 @@ class _HomeWithApps extends StatelessWidget {
 class _ActivitySummaryCard extends StatelessWidget {
   final int pendingCount;
   final int activeOffers;
+  final Color surfaceColor;
+  final Color borderColor;
 
   const _ActivitySummaryCard({
     required this.pendingCount,
     required this.activeOffers,
+    required this.surfaceColor,
+    required this.borderColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    context.watch<SettingsState>();
+    
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,7 +162,7 @@ class _ActivitySummaryCard extends StatelessWidget {
                   label: 'Aplicaciones pendientes',
                 ),
               ),
-              Container(width: 1, height: 50, color: AppColors.border),
+              Container(width: 1, height: 50, color: borderColor),
               Expanded(
                 child: _Metric(
                   value: activeOffers.toString(),
@@ -171,7 +201,14 @@ class _Metric extends StatelessWidget {
 
 class _ApplicationCard extends StatelessWidget {
   final ApplicationModel app;
-  const _ApplicationCard({required this.app});
+  final Color surfaceColor;
+  final Color borderColor;
+
+  const _ApplicationCard({
+    required this.app,
+    required this.surfaceColor,
+    required this.borderColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -190,9 +227,9 @@ class _ApplicationCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         children: [
@@ -234,6 +271,13 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<SettingsState>();
+    
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final containerBg = isDark ? AppColors.darkSurface : AppColors.surface;
+    final containerBorder = isDark ? AppColors.darkBorder : AppColors.border;
+    final iconColor = isDark ? const Color(0xFF666C78) : const Color(0xFFB6BFCC);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
       child: Column(
@@ -243,9 +287,9 @@ class _EmptyState extends StatelessWidget {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: containerBg,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: containerBorder),
               boxShadow: const [
                 BoxShadow(
                   blurRadius: 14,
@@ -254,19 +298,19 @@ class _EmptyState extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(Icons.inbox_outlined, size: 46, color: Color(0xFFB6BFCC)),
+            child: Icon(Icons.inbox_outlined, size: 46, color: iconColor),
           ),
           const SizedBox(height: 22),
-          const Text(
-            'Todavía no hay aplicaciones',
+          Text(
+            context.t('empty_state_title'),
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
-          const Text(
-            'Cuando los estudiantes apliquen,\naparecerán aquí.',
+          Text(
+            context.t('empty_state_subtitle'),
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, color: AppColors.greyText, height: 1.35),
+            style: const TextStyle(fontSize: 18, color: AppColors.greyText, height: 1.35),
           ),
           const SizedBox(height: 22),
           SizedBox(
