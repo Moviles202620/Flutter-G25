@@ -18,9 +18,9 @@ class StaffHomePage extends StatelessWidget {
         backgroundColor: AppColors.surface,
         surfaceTintColor: AppColors.surface,
         elevation: 0,
-        leadingWidth: 64,
+        leadingWidth: 40,
         leading: Padding(
-          padding: const EdgeInsets.only(left: 14),
+          padding: const EdgeInsets.only(left: 8),
           child: Image.asset('assets/logo.png', fit: BoxFit.contain),
         ),
         title: const Text(

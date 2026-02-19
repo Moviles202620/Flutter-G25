@@ -27,8 +27,8 @@ class StaffProfilePage extends StatelessWidget {
             // Avatar
             Center(
               child: Container(
-                width: 78,
-                height: 78,
+                width: 60,
+                height: 60,
                 decoration: const BoxDecoration(
                   color: AppColors.primaryYellow,
                   shape: BoxShape.circle,
@@ -36,7 +36,7 @@ class StaffProfilePage extends StatelessWidget {
                 child: const Center(
                   child: Text(
                     'FU',
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.white),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white),
                   ),
                 ),
               ),
@@ -256,7 +256,7 @@ class _SoftButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = filled ? AppColors.primaryYellow.withOpacity(0.2) : Colors.white;
     final border = filled ? Colors.transparent : AppColors.border;
-    final color = filled ? AppColors.primaryYellow : AppColors.greyText;
+    final color = filled ? const Color(0xFF9A5B00) : AppColors.greyText;
 
     return SizedBox(
       height: 44,
