@@ -1,4 +1,4 @@
-# 🐐 Goatly – Kotlin App (Student Application)
+# 🐐 Goatly – Flutter App
 
 Mobile application developed in Flutter for the course **Construcción de Aplicaciones Móviles**.
 
