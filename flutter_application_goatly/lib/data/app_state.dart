@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../models/offer_model.dart';
 import '../models/application_model.dart';
+import '../mock_data/departments.dart';
 
 class AppState extends ChangeNotifier {
   UserModel? _user;
@@ -30,7 +31,7 @@ class AppState extends ChangeNotifier {
     _user = UserModel(
       name: 'Funcionario Uniandes',
       email: e,
-      department: 'Departamento de Admisiones',
+      department: 'Administrativo',
       university: 'Universidad de los Andes',
     );
 
@@ -44,6 +45,22 @@ class AppState extends ChangeNotifier {
 
   void logout() {
     _user = null;
+    notifyListeners();
+  }
+
+  void updateUserProfile({
+    required String name,
+    required String department,
+  }) {
+    if (_user == null) return;
+    
+    _user = UserModel(
+      name: name,
+      email: _user!.email,
+      department: department,
+      university: 'Universidad de los Andes',
+    );
+    
     notifyListeners();
   }
 

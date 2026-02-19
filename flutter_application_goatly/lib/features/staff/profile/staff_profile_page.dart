@@ -5,6 +5,7 @@ import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
 import '../../../models/application_model.dart';
 import '../home/application_detail_page.dart';
+import 'edit_profile_page.dart';
 
 class StaffProfilePage extends StatelessWidget {
   const StaffProfilePage({super.key});
@@ -75,8 +76,9 @@ class StaffProfilePage extends StatelessWidget {
                       text: 'Editar perfil',
                       filled: true,
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Editar perfil (pendiente Sprint 2)')),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const EditProfilePage()),
                         );
                       },
                     ),
