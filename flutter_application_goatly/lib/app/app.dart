@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/app_state.dart';
+import '../data/settings_state.dart';
 import 'routes.dart';
 import 'theme.dart';
 
@@ -9,13 +10,22 @@ class GoatlyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AppState(),
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        initialRoute: Routes.login,
-        routes: Routes.map,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppState()),
+        ChangeNotifierProvider(create: (_) => SettingsState()),
+      ],
+      child: Consumer<SettingsState>(
+        builder: (context, settings, _) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
+            themeMode: settings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            initialRoute: Routes.login,
+            routes: Routes.map,
+          );
+        },
       ),
     );
   }

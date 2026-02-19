@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
@@ -12,6 +13,7 @@ class StaffCreateOfferFormPage extends StatefulWidget {
 }
 
 class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
+  final _formKey = GlobalKey<FormState>();
   final _descCtrl = TextEditingController();
   final _titleCtrl = TextEditingController();
   final _valueCtrl = TextEditingController();
@@ -105,19 +107,32 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
   }
 
   void _publish() {
-    final title = _titleCtrl.text.trim();
-    final desc = _descCtrl.text.trim();
-    final cat = _categoria ?? '';
-    final value = _parseCop(_valueCtrl.text);
-    final dur = _parseDuration(_durationCtrl.text);
-    final dt = _buildDateTimeOrNow();
-
-    if (title.isEmpty || desc.isEmpty || cat.isEmpty || value <= 0 || dur <= 0) {
+    if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Completa título, descripción, categoría, valor y duración.')),
+        const SnackBar(
+          content: Text('Por favor corrige los errores en el formulario'),
+          backgroundColor: AppColors.danger,
+        ),
       );
       return;
     }
+
+    if (_categoria == null || _categoria!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor selecciona una categoría'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
+
+    final title = _titleCtrl.text.trim();
+    final desc = _descCtrl.text.trim();
+    final cat = _categoria!;
+    final value = _parseCop(_valueCtrl.text);
+    final dur = _parseDuration(_durationCtrl.text);
+    final dt = _buildDateTimeOrNow();
 
     context.read<AppState>().addOffer(
       OfferModel(
@@ -128,6 +143,13 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
         dateTime: dt,
         durationHours: dur,
         isOnSite: _presencial,
+      ),
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('¡Oferta publicada exitosamente!'),
+        backgroundColor: AppColors.success,
       ),
     );
 
@@ -152,10 +174,12 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
         centerTitle: true,
       ),
       body: SafeArea(
-        child: Stack(
-          children: [
-            ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+        child: Form(
+          key: _formKey,
+          child: Stack(
+            children: [
+              ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
               children: [
                 const Text('Detalles de la oferta', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 6),
@@ -171,8 +195,12 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
                     children: [
                       const Text('TÍTULO', style: TextStyle(letterSpacing: 1.1, fontWeight: FontWeight.w900)),
                       const SizedBox(height: 10),
-                      TextField(
+                      TextFormField(
                         controller: _titleCtrl,
+                        maxLength: 80,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]')),
+                        ],
                         decoration: InputDecoration(
                           hintText: 'Ejem: Monitoría de Cálculo',
                           hintStyle: const TextStyle(color: Color(0xFF9AA4B2)),
@@ -187,13 +215,33 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
                             borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(color: AppColors.primaryYellow, width: 1.5),
                           ),
+                          errorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.danger),
+                          ),
+                          focusedErrorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+                          ),
                         ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'El título es obligatorio';
+                          }
+                          if (value.trim().length < 3) {
+                            return 'El título debe tener al menos 3 caracteres';
+                          }
+                          if (!RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$').hasMatch(value)) {
+                            return 'El título solo puede contener letras';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 14),
 
                       const Text('DESCRIPCIÓN', style: TextStyle(letterSpacing: 1.1, fontWeight: FontWeight.w900)),
                       const SizedBox(height: 10),
-                      TextField(
+                      TextFormField(
                         controller: _descCtrl,
                         maxLength: 1000,
                         maxLines: 6,
@@ -213,7 +261,24 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
                             borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(color: AppColors.primaryYellow, width: 1.5),
                           ),
+                          errorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.danger),
+                          ),
+                          focusedErrorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+                          ),
                         ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'La descripción es obligatoria';
+                          }
+                          if (value.trim().length < 10) {
+                            return 'La descripción debe tener al menos 10 caracteres';
+                          }
+                          return null;
+                        },
                       ),
                       Align(
                         alignment: Alignment.centerRight,
@@ -266,9 +331,12 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
                     children: [
                       const Text('VALOR (COP)', style: TextStyle(letterSpacing: 1.1, fontWeight: FontWeight.w900)),
                       const SizedBox(height: 10),
-                      TextField(
+                      TextFormField(
                         controller: _valueCtrl,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         decoration: InputDecoration(
                           prefixText: '\$  ',
                           hintText: '60000',
@@ -284,7 +352,28 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
                             borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(color: AppColors.primaryYellow, width: 1.5),
                           ),
+                          errorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.danger),
+                          ),
+                          focusedErrorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+                          ),
                         ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'El valor es obligatorio';
+                          }
+                          final numValue = int.tryParse(value.trim());
+                          if (numValue == null) {
+                            return 'Ingresa solo números';
+                          }
+                          if (numValue <= 0) {
+                            return 'El valor debe ser mayor a 0';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 16),
 
@@ -316,9 +405,12 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
                       Row(
                         children: [
                           Expanded(
-                            child: TextField(
+                            child: TextFormField(
                               controller: _durationCtrl,
                               keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                               decoration: InputDecoration(
                                 hintText: 'Ejem: 2',
                                 hintStyle: const TextStyle(color: Color(0xFF9AA4B2)),
@@ -333,7 +425,28 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: const BorderSide(color: AppColors.primaryYellow, width: 1.5),
                                 ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.danger),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+                                ),
                               ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'La duración es obligatoria';
+                                }
+                                final numValue = int.tryParse(value.trim());
+                                if (numValue == null) {
+                                  return 'Ingresa solo números';
+                                }
+                                if (numValue <= 0) {
+                                  return 'La duración debe ser mayor a 0';
+                                }
+                                return null;
+                              },
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -390,6 +503,7 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

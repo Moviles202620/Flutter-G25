@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../app/routes.dart';
 import '../../../app/theme.dart';
+import '../../../app/localization.dart';
 import '../../../data/app_state.dart';
+import '../../../data/settings_state.dart';
 import '../../../models/offer_model.dart';
 
 class StaffCreateOffersPage extends StatelessWidget {
@@ -11,23 +13,33 @@ class StaffCreateOffersPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final offers = context.watch<AppState>().offers;
+    context.watch<SettingsState>(); // Escuchar cambios
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final appBarBg = isDark ? AppColors.darkSurface : AppColors.surface;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: AppColors.surface,
+        backgroundColor: appBarBg,
+        surfaceTintColor: appBarBg,
         elevation: 0,
-        title: const Text('Mis ofertas', style: TextStyle(fontWeight: FontWeight.w900)),
+        title: Text(
+          context.t('my_offers'),
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
         children: [
-          if (offers.isEmpty) const _EmptyOffers(),
+          if (offers.isEmpty)
+            _EmptyOffers(
+              isDark: isDark,
+            ),
           ...offers.map((o) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _OfferCard(offer: o),
+                child: _OfferCard(offer: o, isDark: isDark),
               )),
         ],
       ),
@@ -46,9 +58,9 @@ class StaffCreateOffersPage extends StatelessWidget {
             ),
             onPressed: () => Navigator.pushNamed(context, Routes.createOfferForm),
             icon: const Icon(Icons.add),
-            label: const Text(
-              'Crear oferta',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            label: Text(
+              context.t('create_offer'),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
           ),
         ),
@@ -58,25 +70,33 @@ class StaffCreateOffersPage extends StatelessWidget {
 }
 
 class _EmptyOffers extends StatelessWidget {
-  const _EmptyOffers();
+  final bool isDark;
+
+  const _EmptyOffers({required this.isDark});
 
   @override
   Widget build(BuildContext context) {
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Text('Aún no has publicado ofertas', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-          SizedBox(height: 8),
+        children: [
           Text(
-            'Publica tu primera oferta para que\nlos estudiantes puedan postularse.',
-            style: TextStyle(color: AppColors.greyText, height: 1.3),
+            context.t('no_offers_yet'),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            context.t('publish_first_offer'),
+            style: const TextStyle(color: AppColors.greyText, height: 1.3),
           ),
         ],
       ),
@@ -86,7 +106,9 @@ class _EmptyOffers extends StatelessWidget {
 
 class _OfferCard extends StatelessWidget {
   final OfferModel offer;
-  const _OfferCard({required this.offer});
+  final bool isDark;
+
+  const _OfferCard({required this.offer, required this.isDark});
 
   String _fmtDateTime(DateTime d) {
     final mm = d.month.toString().padLeft(2, '0');
@@ -99,15 +121,18 @@ class _OfferCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+
     final location = offer.isOnSite ? 'Presencial' : 'Remoto';
     final when = _fmtDateTime(offer.dateTime);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
