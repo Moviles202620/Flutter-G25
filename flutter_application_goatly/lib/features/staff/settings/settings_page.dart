@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../app/theme.dart';
 import '../../../data/settings_state.dart';
+import '../../../services/biometric_service.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -11,6 +12,7 @@ class SettingsPage extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+    final settings = context.watch<SettingsState>();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -20,7 +22,7 @@ class SettingsPage extends StatelessWidget {
         elevation: 0,
         centerTitle: true,
         title: Text(
-          context.watch<SettingsState>().getString('settings'),
+          settings.getString('settings'),
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
@@ -30,15 +32,13 @@ class SettingsPage extends StatelessWidget {
           // Dark Mode
           _SettingTile(
             icon: Icons.dark_mode_rounded,
-            title: context.watch<SettingsState>().getString('dark_mode'),
+            title: settings.getString('dark_mode'),
             surfaceColor: surfaceColor,
             borderColor: borderColor,
             trailing: Switch(
-              value: context.watch<SettingsState>().isDarkMode,
-              onChanged: (value) {
-                context.read<SettingsState>().setDarkMode(value);
-              },
-              activeColor: AppColors.primaryYellow,
+              value: settings.isDarkMode,
+              onChanged: (value) => context.read<SettingsState>().setDarkMode(value),
+              activeThumbColor: AppColors.primaryYellow,
             ),
           ),
           const SizedBox(height: 12),
@@ -46,10 +46,10 @@ class SettingsPage extends StatelessWidget {
           // Language
           _TapableSetting(
             icon: Icons.language_rounded,
-            title: context.watch<SettingsState>().getString('language'),
-            subtitle: context.watch<SettingsState>().language == 'es'
-                ? context.read<SettingsState>().getString('spanish')
-                : context.read<SettingsState>().getString('english'),
+            title: settings.getString('language'),
+            subtitle: settings.language == 'es'
+                ? settings.getString('spanish')
+                : settings.getString('english'),
             surfaceColor: surfaceColor,
             borderColor: borderColor,
             onTap: () => _showLanguageDialog(context),
@@ -59,7 +59,7 @@ class SettingsPage extends StatelessWidget {
           // Change Password
           _TapableSetting(
             icon: Icons.lock_rounded,
-            title: context.watch<SettingsState>().getString('change_password'),
+            title: settings.getString('change_password'),
             subtitle: '••••••••',
             surfaceColor: surfaceColor,
             borderColor: borderColor,
@@ -67,10 +67,18 @@ class SettingsPage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
+          // Biometric Authentication
+          _BiometricToggleTile(
+            surfaceColor: surfaceColor,
+            borderColor: borderColor,
+            settings: settings,
+          ),
+          const SizedBox(height: 12),
+
           // App Version
           _TapableSetting(
             icon: Icons.info_rounded,
-            title: context.watch<SettingsState>().getString('app_version'),
+            title: settings.getString('app_version'),
             subtitle: '1.0.0',
             surfaceColor: surfaceColor,
             borderColor: borderColor,
@@ -81,7 +89,7 @@ class SettingsPage extends StatelessWidget {
           // Privacy
           _TapableSetting(
             icon: Icons.privacy_tip_rounded,
-            title: context.watch<SettingsState>().getString('privacy'),
+            title: settings.getString('privacy'),
             subtitle: 'Ver detalles',
             surfaceColor: surfaceColor,
             borderColor: borderColor,
@@ -95,16 +103,12 @@ class SettingsPage extends StatelessWidget {
               showDialog(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: Text(
-                    context.read<SettingsState>().getString('logout'),
-                  ),
+                  title: Text(settings.getString('logout')),
                   content: const Text('¿Deseas cerrar sesión?'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
-                      child: Text(
-                        context.read<SettingsState>().getString('cancel'),
-                      ),
+                      child: Text(settings.getString('cancel')),
                     ),
                     TextButton(
                       onPressed: () {
@@ -115,7 +119,7 @@ class SettingsPage extends StatelessWidget {
                         );
                       },
                       child: Text(
-                        context.read<SettingsState>().getString('logout'),
+                        settings.getString('logout'),
                         style: const TextStyle(color: AppColors.danger),
                       ),
                     ),
@@ -126,13 +130,13 @@ class SettingsPage extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
               decoration: BoxDecoration(
-                color: AppColors.danger.withOpacity(0.1),
+                color: AppColors.danger.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.danger.withOpacity(0.3)),
+                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
               ),
               child: Center(
                 child: Text(
-                  context.watch<SettingsState>().getString('logout'),
+                  settings.getString('logout'),
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     color: AppColors.danger,
@@ -157,32 +161,26 @@ class SettingsPage extends StatelessWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                title: Text(settings.getString('spanish')),
-                leading: Radio(
-                  value: 'es',
-                  groupValue: settings.language,
-                  onChanged: (value) {
-                    if (value != null) {
-                      settings.setLanguage(value);
-                      Navigator.pop(ctx);
-                    }
-                  },
-                  activeColor: AppColors.primaryYellow,
-                ),
-              ),
-              ListTile(
-                title: Text(settings.getString('english')),
-                leading: Radio(
-                  value: 'en',
-                  groupValue: settings.language,
-                  onChanged: (value) {
-                    if (value != null) {
-                      settings.setLanguage(value);
-                      Navigator.pop(ctx);
-                    }
-                  },
-                  activeColor: AppColors.primaryYellow,
+              RadioGroup<String>(
+                groupValue: settings.language,
+                onChanged: (value) {
+                  if (value != null) {
+                    settings.setLanguage(value);
+                    Navigator.pop(ctx);
+                  }
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      title: Text(settings.getString('spanish')),
+                      leading: const Radio<String>(value: 'es'),
+                    ),
+                    ListTile(
+                      title: Text(settings.getString('english')),
+                      leading: const Radio<String>(value: 'en'),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -254,7 +252,7 @@ class SettingsPage extends StatelessWidget {
 
               if (newPasswordCtrl.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
+                  const SnackBar(
                     content: Text('La contraseña no puede estar vacía'),
                     backgroundColor: AppColors.danger,
                   ),
@@ -262,7 +260,6 @@ class SettingsPage extends StatelessWidget {
                 return;
               }
 
-              // Intenta cambiar la contraseña
               final success = settings.changePassword(
                 currentPasswordCtrl.text,
                 newPasswordCtrl.text,
@@ -337,6 +334,118 @@ class SettingsPage extends StatelessWidget {
     );
   }
 }
+
+// ── Biometric toggle tile ─────────────────────────────────────────────────────
+
+class _BiometricToggleTile extends StatefulWidget {
+  final Color surfaceColor;
+  final Color borderColor;
+  final SettingsState settings;
+
+  const _BiometricToggleTile({
+    required this.surfaceColor,
+    required this.borderColor,
+    required this.settings,
+  });
+
+  @override
+  State<_BiometricToggleTile> createState() => _BiometricToggleTileState();
+}
+
+class _BiometricToggleTileState extends State<_BiometricToggleTile> {
+  bool _enabled = false;
+  bool _available = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final available = await BiometricService.isAvailable();
+    final enabled = await BiometricService.isEnabled();
+    if (mounted) {
+      setState(() {
+        _available = available;
+        _enabled = enabled;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _onToggle(bool value) async {
+    if (value) {
+      // Require the user to pass biometric before enabling
+      final reason = widget.settings.getString('biometric_reason');
+      final authenticated = await BiometricService.authenticate(
+        localizedReason: reason,
+      );
+      if (!authenticated || !mounted) return;
+      await BiometricService.setEnabled(true);
+    } else {
+      await BiometricService.setEnabled(false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.settings.getString('biometric_disabled')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    if (mounted) setState(() => _enabled = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: widget.surfaceColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: widget.borderColor),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.fingerprint, color: AppColors.primaryYellow),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.settings.getString('biometric_auth'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _loading
+                      ? '...'
+                      : !_available
+                          ? widget.settings.getString('biometric_not_available')
+                          : _enabled
+                              ? widget.settings.getString('biometric_subtitle_on')
+                              : widget.settings.getString('biometric_subtitle_off'),
+                  style: const TextStyle(fontSize: 13, color: AppColors.greyText),
+                ),
+              ],
+            ),
+          ),
+          if (!_loading)
+            Switch(
+              value: _enabled,
+              onChanged: _available ? _onToggle : null,
+              activeThumbColor: AppColors.primaryYellow,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Reusable tile widgets ─────────────────────────────────────────────────────
 
 class _SettingTile extends StatelessWidget {
   final IconData icon;

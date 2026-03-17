@@ -6,6 +6,7 @@ import '../../../app/localization.dart';
 import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
 import '../../../models/offer_model.dart';
+import '../home/applicant_list_page.dart';
 
 class StaffCreateOffersPage extends StatelessWidget {
   const StaffCreateOffersPage({super.key});
@@ -39,7 +40,16 @@ class StaffCreateOffersPage extends StatelessWidget {
             ),
           ...offers.map((o) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _OfferCard(offer: o, isDark: isDark),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ApplicantListPage(offer: o),
+                    ),
+                  ),
+                  child: _OfferCard(offer: o, isDark: isDark),
+                ),
               )),
         ],
       ),
