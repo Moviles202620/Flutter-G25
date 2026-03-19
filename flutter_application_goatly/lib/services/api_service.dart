@@ -2,13 +2,17 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/offer_model.dart';
 import '../models/application_model.dart';
+import '../models/acceptance_rate_model.dart';
+import '../models/insights_model.dart';
+import '../models/user_profile_model.dart';
 
 /// Central HTTP client for the Goatly FastAPI backend.
 ///
+/// Web/Chrome      : baseUrl = 'http://localhost:8000'
 /// Android emulator: baseUrl = 'http://10.0.2.2:8000'
 /// Physical device : baseUrl = 'http://YOUR_PC_LAN_IP:8000'
 class ApiService {
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  static const String baseUrl = 'http://localhost:8000';
 
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',
@@ -128,6 +132,117 @@ class ApiService {
       throw ApiException(
           'Error al actualizar estado (${res.statusCode})');
     }
+  }
+
+  // ── David's Features ────────────────────────────────────────────────────
+
+  // ── Feature 1 (David) ─ Acceptance Rate Dashboard ──────────────────────
+
+  /// GET /analytics/acceptance-rate
+  static Future<List<AcceptanceRateModel>> getAcceptanceRates() async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/analytics/acceptance-rate'), headers: _headers)
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener tasas de aceptación (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => AcceptanceRateModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Feature 2 (David) ─ Offer Edit & Delete ────────────────────────────
+
+  /// PUT /offers/{offerId}  →  updated OfferModel
+  static Future<OfferModel> updateOffer(
+      String offerId, Map<String, dynamic> fields) async {
+    final res = await http
+        .put(
+          Uri.parse('$baseUrl/offers/$offerId'),
+          headers: _headers,
+          body: jsonEncode(fields),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al actualizar oferta (${res.statusCode}): ${res.body}');
+    }
+    return OfferModel.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// DELETE /offers/{offerId}
+  static Future<void> deleteOffer(String offerId) async {
+    final res = await http
+        .delete(Uri.parse('$baseUrl/offers/$offerId'), headers: _headers)
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al eliminar oferta (${res.statusCode})');
+    }
+  }
+
+  // ── Feature 3 (David) ─ User Profile & Theme Sync ─────────────────────
+
+  /// Helper to build headers with auth token.
+  static Map<String, String> _authHeaders(String token) => {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+  /// GET /users/me
+  static Future<UserProfileModel> getUserProfile(String token) async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/users/me'), headers: _authHeaders(token))
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener perfil (${res.statusCode})');
+    }
+    return UserProfileModel.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// PUT /users/me
+  static Future<UserProfileModel> updateUserProfile(
+      String token, Map<String, dynamic> fields) async {
+    final res = await http
+        .put(
+          Uri.parse('$baseUrl/users/me'),
+          headers: _authHeaders(token),
+          body: jsonEncode(fields),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al actualizar perfil (${res.statusCode}): ${res.body}');
+    }
+    return UserProfileModel.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  // ── Feature 4 (David) ─ Smart Offer Insights ──────────────────────────
+
+  /// GET /analytics/insights
+  static Future<InsightsModel> getInsights() async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/analytics/insights'), headers: _headers)
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener insights (${res.statusCode})');
+    }
+    return InsightsModel.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>);
   }
 }
 

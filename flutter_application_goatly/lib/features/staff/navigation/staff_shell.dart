@@ -5,6 +5,7 @@ import '../../../data/settings_state.dart';
 import '../home/staff_home_page.dart';
 import '../create/staff_create_offers_page.dart';
 import '../profile/staff_profile_page.dart';
+import '../analytics/analytics_shell.dart';
 import '../../../app/theme.dart';
 
 
@@ -19,10 +20,11 @@ class _StaffShellState extends State<StaffShell> {
   int _index = 0;
 
   final _pages = const [
-  StaffHomePage(),
-  StaffCreateOffersPage(),
-  StaffProfilePage(),
-];
+    StaffHomePage(),
+    StaffCreateOffersPage(),
+    AnalyticsShell(),
+    StaffProfilePage(),
+  ];
 
 
   @override
@@ -34,6 +36,7 @@ class _StaffShellState extends State<StaffShell> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (v) => setState(() => _index = v),
+        type: BottomNavigationBarType.fixed,
         backgroundColor: Theme.of(context).brightness == Brightness.dark
             ? AppColors.darkSurface
             : AppColors.surface,
@@ -48,6 +51,10 @@ class _StaffShellState extends State<StaffShell> {
           BottomNavigationBarItem(
             icon: const Icon(Icons.add_circle_outline),
             label: context.t('create'),
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.analytics_outlined),
+            label: context.t('analytics'),
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.person),

@@ -6,7 +6,9 @@ import '../../../app/localization.dart';
 import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
 import '../../../models/offer_model.dart';
+import '../../../services/api_service.dart';
 import '../home/applicant_list_page.dart';
+import 'edit_offer_page.dart';
 
 class StaffCreateOffersPage extends StatelessWidget {
   const StaffCreateOffersPage({super.key});
@@ -129,12 +131,70 @@ class _OfferCard extends StatelessWidget {
     return '$mm/$dd ${hh.padLeft(2, '0')}:$min $ampm';
   }
 
+  Future<void> _deleteOffer(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(context.t('delete_offer_confirm'),
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(context.t('delete_offer_body')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('cancel'),
+                style: const TextStyle(color: AppColors.greyText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.t('delete'),
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ApiService.deleteOffer(offer.id);
+      if (context.mounted) {
+        context.read<AppState>().removeOffer(offer.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.t('offer_deleted')),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
 
-    final location = offer.isOnSite ? 'Presencial' : 'Remoto';
+    final location = offer.isOnSite
+        ? context.t('on_site')
+        : context.t('remote');
     final when = _fmtDateTime(offer.dateTime);
 
     return Container(
@@ -147,7 +207,34 @@ class _OfferCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(offer.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          Row(
+            children: [
+              Expanded(
+                child: Text(offer.title,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w900)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                color: AppColors.primaryYellow,
+                tooltip: context.t('edit_offer'),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditOfferPage(offer: offer),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20),
+                color: AppColors.danger,
+                tooltip: context.t('delete_offer'),
+                onPressed: () => _deleteOffer(context),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
           Text(
             '${offer.category} • \$${offer.valueCop} COP',

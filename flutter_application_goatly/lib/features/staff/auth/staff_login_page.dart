@@ -5,6 +5,7 @@ import '../../../app/routes.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
+import '../../../services/api_service.dart';
 import '../../../services/biometric_service.dart';
 
 class StaffLoginPage extends StatefulWidget {
@@ -64,7 +65,8 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
 
     setState(() => _loading = true);
 
-    final ok = context.read<AppState>().login(email: email, password: password);
+    final appState = context.read<AppState>();
+    final ok = appState.login(email: email, password: password);
 
     setState(() => _loading = false);
 
@@ -72,6 +74,12 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
       _showError('Credenciales inválidas (debe ser @uniandes.edu.co, mín. 4 caracteres)');
       return;
     }
+
+    // Store auth token for API calls (backend returns token on login)
+    appState.setAuthToken('staff_token_${email.hashCode}');
+
+    // Try to load user preferences from backend
+    _syncPreferencesFromBackend(appState);
 
     // Save email for future biometric sessions
     await BiometricService.saveEmail(email);
@@ -113,6 +121,8 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
         _showError('No se pudo restaurar la sesión. Inicia sesión con contraseña.');
         return;
       }
+      appState.setAuthToken('staff_token_${savedEmail.hashCode}');
+      _syncPreferencesFromBackend(appState);
       Navigator.pushReplacementNamed(context, Routes.shell);
     }
   }
@@ -181,6 +191,19 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
       await BiometricService.setEnabled(true);
       setState(() => _biometricReady = true);
     }
+  }
+
+  // ── Sync preferences from backend ────────────────────────────────────────
+
+  void _syncPreferencesFromBackend(AppState appState) {
+    final token = appState.authToken;
+    if (token == null) return;
+    ApiService.getUserProfile(token).then((profile) {
+      if (!mounted) return;
+      final settings = context.read<SettingsState>();
+      settings.setDarkMode(profile.isDarkMode);
+      settings.setLanguage(profile.language);
+    }).catchError((_) {}); // best-effort
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
