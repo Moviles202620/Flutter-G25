@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../../app/localization.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
+import '../../../data/settings_state.dart';
 import '../../../mock_data/departments.dart';
+import '../../../services/api_service.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -31,15 +34,41 @@ class _EditProfilePageState extends State<EditProfilePage> {
     super.dispose();
   }
 
-  void _saveProfile() {
-    if (_formKey.currentState!.validate()) {
-      context.read<AppState>().updateUserProfile(
-            name: _nameController.text.trim(),
-            department: _selectedDepartment!,
-          );
+  bool _saving = false;
+
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _saving = true);
+
+    final appState = context.read<AppState>();
+    final settings = context.read<SettingsState>();
+    final name = _nameController.text.trim();
+    final department = _selectedDepartment!;
+
+    // Update locally
+    appState.updateUserProfile(name: name, department: department);
+
+    // Sync with backend if token available
+    final token = appState.authToken;
+    if (token != null) {
+      try {
+        await ApiService.updateUserProfile(token, {
+          'name': name,
+          'department': department,
+          'language': settings.language,
+          'is_dark_mode': settings.isDarkMode,
+        });
+      } on ApiException {
+        // Backend sync failed, local update still applied
+      }
+    }
+
+    if (mounted) {
+      setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Perfil actualizado exitosamente'),
+        SnackBar(
+          content: Text(context.t('profile_updated')),
           backgroundColor: AppColors.success,
         ),
       );
@@ -270,7 +299,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               SizedBox(
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _saveProfile,
+                  onPressed: _saving ? null : _saveProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryYellow,
                     foregroundColor: Colors.white,

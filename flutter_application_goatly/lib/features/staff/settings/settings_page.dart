@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../app/theme.dart';
+import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
+import '../../../services/api_service.dart';
 import '../../../services/biometric_service.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -37,7 +39,10 @@ class SettingsPage extends StatelessWidget {
             borderColor: borderColor,
             trailing: Switch(
               value: settings.isDarkMode,
-              onChanged: (value) => context.read<SettingsState>().setDarkMode(value),
+              onChanged: (value) {
+                context.read<SettingsState>().setDarkMode(value);
+                _syncPreferencesToBackend(context);
+              },
               activeThumbColor: AppColors.primaryYellow,
             ),
           ),
@@ -151,6 +156,18 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  /// Syncs dark mode & language preferences to the backend (fire-and-forget).
+  void _syncPreferencesToBackend(BuildContext context) {
+    final token = context.read<AppState>().authToken;
+    if (token == null) return;
+    final s = context.read<SettingsState>();
+    // ignore: unawaited_futures
+    ApiService.updateUserProfile(token, {
+      'language': s.language,
+      'is_dark_mode': s.isDarkMode,
+    }).then((_) {}).catchError((_) {}); // best-effort sync
+  }
+
   void _showLanguageDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -166,6 +183,7 @@ class SettingsPage extends StatelessWidget {
                 onChanged: (value) {
                   if (value != null) {
                     settings.setLanguage(value);
+                    _syncPreferencesToBackend(context);
                     Navigator.pop(ctx);
                   }
                 },

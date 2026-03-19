@@ -7,12 +7,14 @@ import '../services/notification_service.dart';
 
 class AppState extends ChangeNotifier {
   UserModel? _user;
+  String? _authToken;
 
   final List<OfferModel> _offers = [];
   final List<ApplicationModel> _applications = [];
   final List<AppNotification> _notifications = [];
 
   UserModel? get user => _user;
+  String? get authToken => _authToken;
   bool get isLoggedIn => _user != null;
 
   List<OfferModel> get offers => List.unmodifiable(_offers);
@@ -84,10 +86,28 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setAuthToken(String token) {
+    _authToken = token;
+    notifyListeners();
+  }
+
   // ── OFFERS ────────────────────────────────────────────────────────────────
 
   void addOffer(OfferModel offer) {
     _offers.insert(0, offer);
+    notifyListeners();
+  }
+
+  void updateOffer(OfferModel updated) {
+    final idx = _offers.indexWhere((o) => o.id == updated.id);
+    if (idx != -1) {
+      _offers[idx] = updated;
+      notifyListeners();
+    }
+  }
+
+  void removeOffer(String offerId) {
+    _offers.removeWhere((o) => o.id == offerId);
     notifyListeners();
   }
 
