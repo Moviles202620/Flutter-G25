@@ -3,7 +3,8 @@ import '../../../app/theme.dart';
 import '../../../models/application_model.dart';
 import 'package:provider/provider.dart';
 import '../../../data/app_state.dart';
-
+import '../../../services/api_service.dart';
+import 'rate_student_page.dart';
 
 class ApplicationDetailPage extends StatelessWidget {
   final ApplicationModel app;
@@ -12,6 +13,18 @@ class ApplicationDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final availLabel = switch (app.availability) {
+      'full_time' => 'Tiempo completo',
+      'part_time' => 'Medio tiempo',
+      _ => 'Flexible',
+    };
+
+    final availColor = switch (app.availability) {
+      'full_time' => AppColors.success,
+      'part_time' => const Color(0xFF3B82F6),
+      _ => AppColors.greyText,
+    };
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -33,44 +46,92 @@ class ApplicationDetailPage extends StatelessWidget {
           ListView(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 120),
             children: [
+              // ── Profile header ────────────────────────────────────────
               _ProfileHeaderCard(
                 initials: app.applicantInitials,
-                name: app.applicantName.replaceAll('Delgado', 'Pérez'), // placeholder
-                subtitle: 'Estudiante Uniandes • Ingeniería de Sistemas',
+                name: app.applicantName,
+                career: app.career.isNotEmpty
+                    ? app.career
+                    : 'Estudiante Uniandes',
+                availability: availLabel,
+                availColor: availColor,
               ),
               const SizedBox(height: 14),
 
+              // ── Academic data ─────────────────────────────────────────
               _SectionCard(
-                icon: Icons.chat_bubble_outline,
-                title: 'Mensaje / Motivación',
-                child: const Text(
-                  'Estoy muy interesado en esta monitoría ya que tengo un excelente desempeño académico en el área (Cálculo Integral y Multivariable) y me apasiona enseñar a otros compañeros para que alcancen sus metas. Tengo experiencia previa ayudando a grupos pequeños de estudio.',
-                  style: TextStyle(fontSize: 16, height: 1.35, color: AppColors.darkText),
+                icon: Icons.school_outlined,
+                title: 'Perfil académico',
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _MetricBox(
+                        value: app.gpa.toStringAsFixed(2),
+                        label: 'GPA',
+                        color: _gpaColor(app.gpa),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _MetricBox(
+                        value: '${app.semester}°',
+                        label: 'Semestre',
+                        color: AppColors.primaryYellow,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 14),
 
+              // ── Motivation letter ─────────────────────────────────────
+              _SectionCard(
+                icon: Icons.chat_bubble_outline,
+                title: 'Carta de motivación',
+                child: Text(
+                  app.motivationLetter.isNotEmpty
+                      ? app.motivationLetter
+                      : 'El postulante no incluyó una carta de motivación.',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    height: 1.5,
+                    color: AppColors.darkText,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // ── Offer details ─────────────────────────────────────────
               _SectionCard(
                 icon: Icons.info_outline,
                 title: 'Detalles de la oferta',
                 child: Column(
-                  children: const [
+                  children: [
                     _DetailRow(
-                      icon: Icons.school_outlined,
-                      title: 'Monitoría de Cálculo',
-                      subtitle: 'Título de la posición',
+                      icon: Icons.work_outline,
+                      title: app.offerTitle,
+                      subtitle: 'Posición',
                     ),
-                    SizedBox(height: 14),
-                    _DetailRow(
-                      icon: Icons.category_outlined,
-                      title: 'Académico',
-                      subtitle: 'Categoría',
-                    ),
-                    SizedBox(height: 14),
+                    const SizedBox(height: 14),
                     _DetailRow(
                       icon: Icons.calendar_month_outlined,
-                      title: '24 de Oct, 2023',
-                      subtitle: 'Enviado el',
+                      title: _formatDate(app.createdAt),
+                      subtitle: 'Postulado el',
+                    ),
+                    const SizedBox(height: 14),
+                    _DetailRow(
+                      icon: Icons.flag_outlined,
+                      title: switch (app.status) {
+                        ApplicationStatus.pending => 'Pendiente de revisión',
+                        ApplicationStatus.accepted => 'Aceptada',
+                        ApplicationStatus.rejected => 'Rechazada',
+                      },
+                      subtitle: 'Estado',
+                      valueColor: switch (app.status) {
+                        ApplicationStatus.accepted => AppColors.success,
+                        ApplicationStatus.rejected => AppColors.danger,
+                        _ => AppColors.darkText,
+                      },
                     ),
                   ],
                 ),
@@ -78,7 +139,7 @@ class ApplicationDetailPage extends StatelessWidget {
             ],
           ),
 
-          // Bottom action bar (Rechazar / Aceptar)
+          // ── Action bar ────────────────────────────────────────────────
           Positioned(
             left: 0,
             right: 0,
@@ -87,55 +148,126 @@ class ApplicationDetailPage extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
               decoration: const BoxDecoration(
                 color: AppColors.surface,
-                border: Border(top: BorderSide(color: AppColors.border)),
+                border:
+                    Border(top: BorderSide(color: AppColors.border)),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _ActionButton(
-                      label: 'Rechazar',
-                      icon: Icons.close,
-                      background: const Color(0xFFFFEEF0),
-                      foreground: AppColors.danger,
-                      onTap: () {
-                        context.read<AppState>().setApplicationStatus(app.id, ApplicationStatus.rejected);
-                        Navigator.pop(context);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ActionButton(
-                      label: 'Aceptar',
-                      icon: Icons.check,
-                      background: AppColors.success,
-                      foreground: Colors.white,
-                      onTap: () {
-                        context.read<AppState>().setApplicationStatus(app.id, ApplicationStatus.accepted);
-                        Navigator.pop(context);
-                      },
-
-                    ),
-                  ),
-                ],
-              ),
+              child: app.isCompleted
+                  // Already rated — show read-only badge
+                  ? _CompletedBanner(rating: app.rating ?? 0)
+                  : app.status == ApplicationStatus.accepted
+                      // Accepted but not yet rated — show "Calificar" button
+                      ? SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryYellow,
+                              foregroundColor: Colors.black,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(14)),
+                            ),
+                            icon: const Icon(Icons.star_rounded,
+                                size: 22),
+                            label: const Text(
+                              'Completar y calificar',
+                              style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900),
+                            ),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    RateStudentPage(app: app),
+                              ),
+                            ),
+                          ),
+                        )
+                      // Pending — show Reject / Accept
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: _ActionButton(
+                                label: 'Rechazar',
+                                icon: Icons.close,
+                                background: const Color(0xFFFFEEF0),
+                                foreground: AppColors.danger,
+                                onTap: () => _updateStatus(
+                                    context,
+                                    ApplicationStatus.rejected),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _ActionButton(
+                                label: 'Aceptar',
+                                icon: Icons.check,
+                                background: AppColors.success,
+                                foreground: Colors.white,
+                                onTap: () => _updateStatus(
+                                    context,
+                                    ApplicationStatus.accepted),
+                              ),
+                            ),
+                          ],
+                        ),
             ),
           ),
         ],
       ),
     );
   }
+
+  Future<void> _updateStatus(
+      BuildContext context, ApplicationStatus newStatus) async {
+    // Capture before async gap
+    final appState = context.read<AppState>();
+
+    // Optimistically update locally
+    appState.setApplicationStatus(app.id, newStatus);
+
+    // Best-effort sync to backend
+    try {
+      await ApiService.updateApplicationStatus(app.id, newStatus);
+    } catch (_) {
+      // Silently ignore — local state already updated
+    }
+
+    if (context.mounted) Navigator.pop(context);
+  }
+
+  String _formatDate(DateTime d) {
+    const months = [
+      'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+      'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+    ];
+    return '${d.day} de ${months[d.month - 1]}, ${d.year}';
+  }
+
+  Color _gpaColor(double gpa) {
+    if (gpa >= 4.5) return AppColors.success;
+    if (gpa >= 3.5) return const Color(0xFFF59E0B);
+    return AppColors.danger;
+  }
 }
+
+// ── Profile header ────────────────────────────────────────────────────────────
 
 class _ProfileHeaderCard extends StatelessWidget {
   final String initials;
   final String name;
-  final String subtitle;
+  final String career;
+  final String availability;
+  final Color availColor;
 
   const _ProfileHeaderCard({
     required this.initials,
     required this.name,
-    required this.subtitle,
+    required this.career,
+    required this.availability,
+    required this.availColor,
   });
 
   @override
@@ -168,23 +300,30 @@ class _ProfileHeaderCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          Text(name,
+              style: const TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: AppColors.greyText, fontSize: 15)),
+          Text(career,
+              style: const TextStyle(
+                  color: AppColors.greyText, fontSize: 15)),
           const SizedBox(height: 10),
-
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.primaryYellow.withOpacity(0.15),
+              color: availColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(999),
+              border:
+                  Border.all(color: availColor.withValues(alpha: 0.35)),
             ),
-            child: const Text(
-              '⚡  DISPONIBLE AHORA',
+            child: Text(
+              availability.toUpperCase(),
               style: TextStyle(
-                color: Color(0xFF9A5B00),
+                color: availColor,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.6,
+                fontSize: 13,
               ),
             ),
           ),
@@ -193,6 +332,48 @@ class _ProfileHeaderCard extends StatelessWidget {
     );
   }
 }
+
+// ── Metric box ────────────────────────────────────────────────────────────────
+
+class _MetricBox extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+
+  const _MetricBox({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(value,
+              style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  color: color)),
+          const SizedBox(height: 4),
+          Text(label,
+              style: const TextStyle(
+                  color: AppColors.greyText,
+                  fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Section card ──────────────────────────────────────────────────────────────
 
 class _SectionCard extends StatelessWidget {
   final IconData icon;
@@ -208,7 +389,7 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
@@ -221,7 +402,9 @@ class _SectionCard extends StatelessWidget {
             children: [
               Icon(icon, color: const Color(0xFF6B7280)),
               const SizedBox(width: 10),
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w900)),
             ],
           ),
           const SizedBox(height: 12),
@@ -232,15 +415,19 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+// ── Detail row ────────────────────────────────────────────────────────────────
+
 class _DetailRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+  final Color? valueColor;
 
   const _DetailRow({
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.valueColor,
   });
 
   @override
@@ -261,9 +448,15 @@ class _DetailRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: valueColor ?? AppColors.darkText)),
               const SizedBox(height: 2),
-              Text(subtitle, style: const TextStyle(color: AppColors.greyText)),
+              Text(subtitle,
+                  style:
+                      const TextStyle(color: AppColors.greyText)),
             ],
           ),
         ),
@@ -271,6 +464,44 @@ class _DetailRow extends StatelessWidget {
     );
   }
 }
+
+// ── Completed banner ──────────────────────────────────────────────────────────
+
+class _CompletedBanner extends StatelessWidget {
+  final double rating;
+  const _CompletedBanner({required this.rating});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.check_circle_outline,
+              color: AppColors.success, size: 22),
+          const SizedBox(width: 10),
+          Text(
+            'Trabajo completado · ${rating.toStringAsFixed(1)} ★',
+            style: const TextStyle(
+              color: AppColors.success,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Action button ─────────────────────────────────────────────────────────────
 
 class _ActionButton extends StatelessWidget {
   final String label;
@@ -294,12 +525,15 @@ class _ActionButton extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: onTap,
         icon: Icon(icon, size: 22),
-        label: Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+        label: Text(label,
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w900)),
         style: ElevatedButton.styleFrom(
           backgroundColor: background,
           foregroundColor: foreground,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14)),
         ),
       ),
     );

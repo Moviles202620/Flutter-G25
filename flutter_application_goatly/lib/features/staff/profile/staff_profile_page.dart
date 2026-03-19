@@ -233,6 +233,8 @@ class StaffProfilePage extends StatelessWidget {
                 initials: a.applicantInitials,
                 name: a.applicantName,
                 role: a.offerTitle,
+                isCompleted: a.isCompleted,
+                rating: a.rating,
                 onTap: () {
                   Navigator.push(
                     context,
@@ -323,12 +325,16 @@ class _ProfileListTile extends StatelessWidget {
   final String name;
   final String role;
   final VoidCallback onTap;
+  final bool isCompleted;
+  final double? rating;
 
   const _ProfileListTile({
     required this.initials,
     required this.name,
     required this.role,
     required this.onTap,
+    this.isCompleted = false,
+    this.rating,
   });
 
   @override
@@ -343,14 +349,17 @@ class _ProfileListTile extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: AppColors.primaryYellow.withOpacity(0.15),
+                color: AppColors.primaryYellow.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.primaryYellow.withOpacity(0.3)),
+                border: Border.all(
+                    color: AppColors.primaryYellow.withValues(alpha: 0.3)),
               ),
               child: Center(
                 child: Text(
                   initials,
-                  style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF9A5B00)),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF9A5B00)),
                 ),
               ),
             ),
@@ -359,9 +368,57 @@ class _ProfileListTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                  Text(name,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 2),
-                  Text(role, style: const TextStyle(color: AppColors.greyText, fontSize: 14)),
+                  Text(role,
+                      style: const TextStyle(
+                          color: AppColors.greyText, fontSize: 14)),
+                  if (isCompleted && rating != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        ...List.generate(5, (i) {
+                          final filled = (i + 1) <= rating!.round();
+                          return Icon(
+                            filled
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            size: 14,
+                            color: filled
+                                ? const Color(0xFFF59E0B)
+                                : AppColors.border,
+                          );
+                        }),
+                        const SizedBox(width: 4),
+                        Text(
+                          rating!.toStringAsFixed(1),
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFF59E0B)),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.success
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Completado',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.success),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
