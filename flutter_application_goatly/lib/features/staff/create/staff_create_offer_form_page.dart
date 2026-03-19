@@ -5,6 +5,7 @@ import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
 import '../../../models/offer_model.dart';
 import '../../../services/api_service.dart';
+import '../../../services/notification_service.dart';
 
 class StaffCreateOfferFormPage extends StatefulWidget {
   const StaffCreateOfferFormPage({super.key});
@@ -153,6 +154,10 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
 
     // Always save locally so the app works offline too
     appState.addOffer(savedOffer);
+
+    // Fire OS banner + add in-app notifications
+    NotificationService.onOfferPublished(savedOffer.title);
+    appState.onOfferPublished(savedOffer);
 
     setState(() => _publishing = false);
 

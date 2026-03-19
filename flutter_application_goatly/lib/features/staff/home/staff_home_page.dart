@@ -3,6 +3,7 @@ import '../../../app/theme.dart';
 import '../../../app/localization.dart';
 import '../../../models/application_model.dart';
 import 'application_detail_page.dart';
+import 'notifications_page.dart';
 import 'package:provider/provider.dart';
 import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
@@ -38,22 +39,38 @@ class StaffHomePage extends StatelessWidget {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 14),
-            child: Stack(
-              children: [
-                const Icon(Icons.notifications_none_rounded, size: 28),
-                Positioned(
-                  right: 2,
-                  top: 2,
-                  child: Container(
-                    width: 9,
-                    height: 9,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
+            child: GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const NotificationsPage()),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.notifications_none_rounded, size: 28),
+                  if (context.watch<AppState>().unreadNotificationCount > 0)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${context.read<AppState>().unreadNotificationCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

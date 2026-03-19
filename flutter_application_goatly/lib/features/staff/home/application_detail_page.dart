@@ -4,6 +4,7 @@ import '../../../models/application_model.dart';
 import 'package:provider/provider.dart';
 import '../../../data/app_state.dart';
 import '../../../services/api_service.dart';
+import 'rate_student_page.dart';
 
 class ApplicationDetailPage extends StatelessWidget {
   final ApplicationModel app;
@@ -150,31 +151,68 @@ class ApplicationDetailPage extends StatelessWidget {
                 border:
                     Border(top: BorderSide(color: AppColors.border)),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _ActionButton(
-                      label: 'Rechazar',
-                      icon: Icons.close,
-                      background: const Color(0xFFFFEEF0),
-                      foreground: AppColors.danger,
-                      onTap: () => _updateStatus(
-                          context, ApplicationStatus.rejected),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ActionButton(
-                      label: 'Aceptar',
-                      icon: Icons.check,
-                      background: AppColors.success,
-                      foreground: Colors.white,
-                      onTap: () => _updateStatus(
-                          context, ApplicationStatus.accepted),
-                    ),
-                  ),
-                ],
-              ),
+              child: app.isCompleted
+                  // Already rated — show read-only badge
+                  ? _CompletedBanner(rating: app.rating ?? 0)
+                  : app.status == ApplicationStatus.accepted
+                      // Accepted but not yet rated — show "Calificar" button
+                      ? SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryYellow,
+                              foregroundColor: Colors.black,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(14)),
+                            ),
+                            icon: const Icon(Icons.star_rounded,
+                                size: 22),
+                            label: const Text(
+                              'Completar y calificar',
+                              style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900),
+                            ),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    RateStudentPage(app: app),
+                              ),
+                            ),
+                          ),
+                        )
+                      // Pending — show Reject / Accept
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: _ActionButton(
+                                label: 'Rechazar',
+                                icon: Icons.close,
+                                background: const Color(0xFFFFEEF0),
+                                foreground: AppColors.danger,
+                                onTap: () => _updateStatus(
+                                    context,
+                                    ApplicationStatus.rejected),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _ActionButton(
+                                label: 'Aceptar',
+                                icon: Icons.check,
+                                background: AppColors.success,
+                                foreground: Colors.white,
+                                onTap: () => _updateStatus(
+                                    context,
+                                    ApplicationStatus.accepted),
+                              ),
+                            ),
+                          ],
+                        ),
             ),
           ),
         ],
@@ -423,6 +461,42 @@ class _DetailRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Completed banner ──────────────────────────────────────────────────────────
+
+class _CompletedBanner extends StatelessWidget {
+  final double rating;
+  const _CompletedBanner({required this.rating});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.check_circle_outline,
+              color: AppColors.success, size: 22),
+          const SizedBox(width: 10),
+          Text(
+            'Trabajo completado · ${rating.toStringAsFixed(1)} ★',
+            style: const TextStyle(
+              color: AppColors.success,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
