@@ -4,6 +4,7 @@ import '../../../app/localization.dart';
 import '../../../models/application_model.dart';
 import 'application_detail_page.dart';
 import 'notifications_page.dart';
+import 'search_applications_page.dart';
 import 'package:provider/provider.dart';
 import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
@@ -37,6 +38,15 @@ class StaffHomePage extends StatelessWidget {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search, size: 26),
+            tooltip: 'Buscar aplicaciones',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const SearchApplicationsPage()),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 14),
             child: GestureDetector(

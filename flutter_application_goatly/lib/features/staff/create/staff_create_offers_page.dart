@@ -10,8 +10,21 @@ import '../../../services/api_service.dart';
 import '../home/applicant_list_page.dart';
 import 'edit_offer_page.dart';
 
-class StaffCreateOffersPage extends StatelessWidget {
+class StaffCreateOffersPage extends StatefulWidget {
   const StaffCreateOffersPage({super.key});
+
+  @override
+  State<StaffCreateOffersPage> createState() => _StaffCreateOffersPageState();
+}
+
+class _StaffCreateOffersPageState extends State<StaffCreateOffersPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppState>().loadOffersFromBackend();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +53,7 @@ class StaffCreateOffersPage extends StatelessWidget {
             _EmptyOffers(
               isDark: isDark,
             ),
-          ...offers.map((o) => Padding(
+          ..._sortedByDeadline(offers).map((o) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
@@ -79,6 +92,34 @@ class StaffCreateOffersPage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Sorts offers by deadline urgency:
+/// 1. Expiring within 24 h (most urgent first)
+/// 2. Open (furthest deadline last)
+/// 3. Expired (at the bottom)
+List<OfferModel> _sortedByDeadline(List<OfferModel> offers) {
+  final now = DateTime.now();
+  final soon = now.add(const Duration(hours: 24));
+
+  expiringSoon(OfferModel o) =>
+      o.deadline != null && o.deadline!.isAfter(now) && o.deadline!.isBefore(soon);
+  expired(OfferModel o) => o.deadline != null && o.deadline!.isBefore(now);
+  open(OfferModel o) => o.deadline == null || o.deadline!.isAfter(soon);
+
+  final soonList = offers.where(expiringSoon).toList()
+    ..sort((a, b) => a.deadline!.compareTo(b.deadline!));
+  final openList = offers.where(open).toList()
+    ..sort((a, b) {
+      if (a.deadline == null && b.deadline == null) return 0;
+      if (a.deadline == null) return 1;
+      if (b.deadline == null) return -1;
+      return a.deadline!.compareTo(b.deadline!);
+    });
+  final expiredList = offers.where(expired).toList()
+    ..sort((a, b) => b.deadline!.compareTo(a.deadline!));
+
+  return [...soonList, ...openList, ...expiredList];
 }
 
 class _EmptyOffers extends StatelessWidget {
@@ -187,6 +228,16 @@ class _OfferCard extends StatelessWidget {
     }
   }
 
+  _DeadlineStatus _deadlineStatus() {
+    final now = DateTime.now();
+    if (offer.deadline == null) return _DeadlineStatus.none;
+    if (offer.deadline!.isBefore(now)) return _DeadlineStatus.expired;
+    if (offer.deadline!.isBefore(now.add(const Duration(hours: 24)))) {
+      return _DeadlineStatus.soon;
+    }
+    return _DeadlineStatus.open;
+  }
+
   @override
   Widget build(BuildContext context) {
     final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
@@ -196,6 +247,7 @@ class _OfferCard extends StatelessWidget {
         ? context.t('on_site')
         : context.t('remote');
     final when = _fmtDateTime(offer.dateTime);
+    final status = _deadlineStatus();
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -214,6 +266,7 @@ class _OfferCard extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 18, fontWeight: FontWeight.w900)),
               ),
+              _DeadlineBadge(status: status, context: context),
               IconButton(
                 icon: const Icon(Icons.edit_outlined, size: 20),
                 color: AppColors.primaryYellow,
@@ -244,6 +297,62 @@ class _OfferCard extends StatelessWidget {
           Text(
             '$when • ${offer.durationHours}h • $location',
             style: const TextStyle(color: AppColors.greyText, fontSize: 15),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _DeadlineStatus { open, soon, expired, none }
+
+class _DeadlineBadge extends StatelessWidget {
+  final _DeadlineStatus status;
+  final BuildContext context;
+
+  const _DeadlineBadge({required this.status, required this.context});
+
+  @override
+  Widget build(BuildContext outerContext) {
+    if (status == _DeadlineStatus.none) return const SizedBox.shrink();
+
+    final (label, color, icon) = switch (status) {
+      _DeadlineStatus.open => (
+          outerContext.t('deadline_open'),
+          AppColors.success,
+          Icons.circle,
+        ),
+      _DeadlineStatus.soon => (
+          outerContext.t('deadline_soon'),
+          const Color(0xFFF5A623),
+          Icons.warning_amber_rounded,
+        ),
+      _DeadlineStatus.expired => (
+          outerContext.t('deadline_expired'),
+          AppColors.danger,
+          Icons.block,
+        ),
+      _DeadlineStatus.none => ('', Colors.transparent, Icons.circle),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
           ),
         ],
       ),
