@@ -4,6 +4,7 @@ import '../models/offer_model.dart';
 import '../models/application_model.dart';
 import '../models/notification_model.dart';
 import '../services/notification_service.dart';
+import '../services/api_service.dart';
 
 class AppState extends ChangeNotifier {
   UserModel? _user;
@@ -92,6 +93,17 @@ class AppState extends ChangeNotifier {
   }
 
   // ── OFFERS ────────────────────────────────────────────────────────────────
+
+  Future<void> loadOffersFromBackend() async {
+    try {
+      final offers = await ApiService.getOffers();
+      _offers.clear();
+      _offers.addAll(offers);
+      notifyListeners();
+    } on ApiException {
+      // Mantener los datos existentes si el backend no responde
+    }
+  }
 
   void addOffer(OfferModel offer) {
     _offers.insert(0, offer);

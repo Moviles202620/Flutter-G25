@@ -5,6 +5,9 @@ import '../models/application_model.dart';
 import '../models/acceptance_rate_model.dart';
 import '../models/insights_model.dart';
 import '../models/user_profile_model.dart';
+import '../models/gpa_analytics_model.dart';
+import '../models/top_applicant_model.dart';
+import '../models/application_search_model.dart';
 
 /// Central HTTP client for the Goatly FastAPI backend.
 ///
@@ -243,6 +246,82 @@ class ApiService {
     }
     return InsightsModel.fromJson(
         jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  // ── Guillermo's Features ────────────────────────────────────────────────
+
+  // ── Feature 1 (Guillermo) ─ GPA Analytics Dashboard (BQ2) ─────────────
+
+  /// GET /analytics/gpa-by-offer
+  /// Returns average GPA per offer with min/max breakdown.
+  static Future<List<GpaAnalyticsModel>> getGpaByOffer() async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/analytics/gpa-by-offer'), headers: _headers)
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener GPA por oferta (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => GpaAnalyticsModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Feature 2 (Guillermo) ─ Application Search ─────────────────────────
+
+  /// GET /applications/search?q=&semester=&career=
+  /// Searches applications across all offers.
+  static Future<List<ApplicationSearchModel>> searchApplications({
+    String? q,
+    int? semester,
+    String? career,
+  }) async {
+    final query = <String, String>{};
+    if (q != null && q.isNotEmpty) query['q'] = q;
+    if (semester != null) query['semester'] = semester.toString();
+    if (career != null && career.isNotEmpty) query['career'] = career;
+
+    final uri = Uri.parse('$baseUrl/applications/search')
+        .replace(queryParameters: query.isEmpty ? null : query);
+
+    final res = await http
+        .get(uri, headers: _headers)
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al buscar aplicaciones (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => ApplicationSearchModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Feature 4 (Guillermo) ─ Top Applicants Leaderboard ────────────────
+
+  /// GET /analytics/top-applicants?limit=10
+  /// Returns the top applicants ranked by GPA across all offers.
+  static Future<List<TopApplicantModel>> getTopApplicants({
+    int limit = 10,
+  }) async {
+    final uri = Uri.parse('$baseUrl/analytics/top-applicants')
+        .replace(queryParameters: {'limit': limit.toString()});
+
+    final res = await http
+        .get(uri, headers: _headers)
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener top aplicantes (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => TopApplicantModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }
 

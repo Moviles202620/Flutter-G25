@@ -5,6 +5,8 @@ import '../../../app/theme.dart';
 import '../../../data/settings_state.dart';
 import 'acceptance_rate_page.dart';
 import 'insights_page.dart';
+import 'gpa_dashboard_page.dart';
+import 'top_applicants_page.dart';
 
 class AnalyticsShell extends StatelessWidget {
   const AnalyticsShell({super.key});
@@ -16,7 +18,7 @@ class AnalyticsShell extends StatelessWidget {
     final appBarBg = isDark ? AppColors.darkSurface : AppColors.surface;
 
     return DefaultTabController(
-      length: 2,
+      length: 4,
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
@@ -34,9 +36,13 @@ class AnalyticsShell extends StatelessWidget {
             unselectedLabelColor:
                 isDark ? AppColors.darkGreyText : AppColors.greyText,
             labelStyle: const TextStyle(fontWeight: FontWeight.w800),
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: context.t('acceptance_rate')),
               Tab(text: context.t('insights')),
+              Tab(text: context.t('gpa_dashboard')),
+              Tab(text: context.t('top_applicants')),
             ],
           ),
         ),
@@ -44,6 +50,8 @@ class AnalyticsShell extends StatelessWidget {
           children: [
             AcceptanceRatePage(),
             InsightsPage(),
+            GpaDashboardPage(),
+            TopApplicantsPage(),
           ],
         ),
       ),
