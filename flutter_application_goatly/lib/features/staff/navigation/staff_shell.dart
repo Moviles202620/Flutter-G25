@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../app/localization.dart';
+import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
 import '../home/staff_home_page.dart';
 import '../create/staff_create_offers_page.dart';
@@ -25,6 +26,14 @@ class _StaffShellState extends State<StaffShell> {
     AnalyticsShell(),
     StaffProfilePage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppState>().loadStaffWorkspace();
+    });
+  }
 
 
   @override

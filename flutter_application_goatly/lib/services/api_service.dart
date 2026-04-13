@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../models/auth_session_model.dart';
 import '../models/offer_model.dart';
 import '../models/application_model.dart';
 import '../models/acceptance_rate_model.dart';
@@ -22,14 +23,56 @@ class ApiService {
     'Accept': 'application/json',
   };
 
+  static Future<AuthSessionModel> login(String email, String password) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/auth/login'),
+          headers: _headers,
+          body: jsonEncode({
+            'email': email.trim().toLowerCase(),
+            'password': password,
+          }),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+        'Error al iniciar sesion (${res.statusCode}): ${res.body}',
+      );
+    }
+
+    return AuthSessionModel.fromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<String> refreshAccessToken(String refreshToken) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/auth/refresh'),
+          headers: _headers,
+          body: jsonEncode({'refresh_token': refreshToken}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+        'Error al refrescar sesion (${res.statusCode}): ${res.body}',
+      );
+    }
+
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return body['access_token'] as String;
+  }
+
   // ── Feature 1 ─ Job Posting Creation ─────────────────────────────────────
 
   /// POST /offers  →  returns the created offer with a server-assigned id.
-  static Future<OfferModel> createOffer(OfferModel offer) async {
+  static Future<OfferModel> createOffer(OfferModel offer, String token) async {
     final res = await http
         .post(
           Uri.parse('$baseUrl/offers'),
-          headers: _headers,
+          headers: _authHeaders(token),
           body: jsonEncode(offer.toJson()),
         )
         .timeout(const Duration(seconds: 10));
@@ -50,6 +93,20 @@ class ApiService {
 
     if (res.statusCode != 200) {
       throw ApiException('Error al obtener ofertas (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => OfferModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  static Future<List<OfferModel>> getMyOffers(String token) async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/offers/my'), headers: _authHeaders(token))
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException('Error al obtener mis ofertas (${res.statusCode})');
     }
     final list = jsonDecode(res.body) as List<dynamic>;
     return list

@@ -133,7 +133,9 @@ class _AcceptanceRateCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             rate.category,
-            style: const TextStyle(color: AppColors.greyText, fontSize: 14),
+            style: TextStyle(
+                color: isDark ? AppColors.darkGreyText : AppColors.greyText,
+                fontSize: 14),
           ),
           const SizedBox(height: 14),
 
@@ -155,8 +157,10 @@ class _AcceptanceRateCard extends StatelessWidget {
                   children: [
                     Text(
                       context.t('acceptance_rate'),
-                      style: const TextStyle(
-                        color: AppColors.greyText,
+                      style: TextStyle(
+                        color: isDark
+                            ? AppColors.darkGreyText
+                            : AppColors.greyText,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
@@ -206,7 +210,9 @@ class _AcceptanceRateCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '${context.t('total_apps')}: ${rate.totalApplications}',
-            style: const TextStyle(color: AppColors.greyText, fontSize: 13),
+            style: TextStyle(
+                color: isDark ? AppColors.darkGreyText : AppColors.greyText,
+                fontSize: 13),
           ),
         ],
       ),

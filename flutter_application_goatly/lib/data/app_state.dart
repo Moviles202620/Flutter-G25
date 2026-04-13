@@ -1,14 +1,18 @@
 import 'package:flutter/foundation.dart';
-import '../models/user_model.dart';
-import '../models/offer_model.dart';
+
 import '../models/application_model.dart';
+import '../models/auth_session_model.dart';
+import '../models/historical_rating_summary.dart';
 import '../models/notification_model.dart';
-import '../services/notification_service.dart';
+import '../models/offer_model.dart';
+import '../models/user_model.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 
 class AppState extends ChangeNotifier {
   UserModel? _user;
   String? _authToken;
+  String? _refreshToken;
 
   final List<OfferModel> _offers = [];
   final List<ApplicationModel> _applications = [];
@@ -16,6 +20,7 @@ class AppState extends ChangeNotifier {
 
   UserModel? get user => _user;
   String? get authToken => _authToken;
+  String? get refreshToken => _refreshToken;
   bool get isLoggedIn => _user != null;
 
   List<OfferModel> get offers => List.unmodifiable(_offers);
@@ -34,45 +39,63 @@ class AppState extends ChangeNotifier {
   int get unreadNotificationCount =>
       _notifications.where((n) => !n.isRead).length;
 
-  // ── AUTH ──────────────────────────────────────────────────────────────────
-
-  bool login({required String email, required String password}) {
-    final e = email.trim().toLowerCase();
-    if (!e.endsWith('@uniandes.edu.co')) return false;
+  Future<bool> login({required String email, required String password}) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.endsWith('@uniandes.edu.co')) return false;
     if (password.trim().length < 4) return false;
 
-    _user = UserModel(
-      name: 'Funcionario Uniandes',
-      email: e,
-      department: 'Administrativo',
-      university: 'Universidad de los Andes',
-    );
-
-    if (_offers.isEmpty && _applications.isEmpty) _seedMockData();
-
-    notifyListeners();
-    return true;
+    try {
+      final session = await ApiService.login(normalizedEmail, password);
+      if (session.user.role != 'staff') return false;
+      await _applySession(session);
+      return true;
+    } on ApiException {
+      return false;
+    }
   }
 
-  bool loginWithBiometric(String email) {
-    final e = email.trim().toLowerCase();
-    if (!e.endsWith('@uniandes.edu.co')) return false;
+  Future<bool> loginWithBiometric({required String refreshToken}) async {
+    try {
+      final accessToken = await ApiService.refreshAccessToken(refreshToken);
+      final profile = await ApiService.getUserProfile(accessToken);
+      if (profile.role != 'staff') return false;
 
+      final session = AuthSessionModel(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        tokenType: 'bearer',
+        user: profile,
+      );
+      await _applySession(session);
+      return true;
+    } on ApiException {
+      return false;
+    }
+  }
+
+  Future<void> _applySession(AuthSessionModel session) async {
     _user = UserModel(
-      name: 'Funcionario Uniandes',
-      email: e,
-      department: 'Administrativo',
+      name: session.user.name,
+      email: session.user.email,
+      department: session.user.department,
       university: 'Universidad de los Andes',
     );
-
-    if (_offers.isEmpty && _applications.isEmpty) _seedMockData();
-
+    _authToken = session.accessToken;
+    _refreshToken = session.refreshToken;
+    _offers.clear();
+    _applications.clear();
+    _notifications.clear();
     notifyListeners();
-    return true;
+    await loadStaffWorkspace();
   }
 
   void logout() {
     _user = null;
+    _authToken = null;
+    _refreshToken = null;
+    _offers.clear();
+    _applications.clear();
+    _notifications.clear();
     notifyListeners();
   }
 
@@ -92,16 +115,116 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── OFFERS ────────────────────────────────────────────────────────────────
+  OfferModel? getOfferById(String offerId) {
+    try {
+      return _offers.firstWhere((offer) => offer.id == offerId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  ApplicationModel? getApplicationById(String applicationId) {
+    try {
+      return _applications.firstWhere(
+        (application) => application.id == applicationId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  DateTime? getApplicationCompletionTime(ApplicationModel application) {
+    final offer = getOfferById(application.offerId);
+    if (offer == null) return null;
+    final duration = offer.durationHours > 0 ? offer.durationHours : 0;
+    return offer.dateTime.add(Duration(hours: duration));
+  }
+
+  bool canRateApplication(ApplicationModel application, {DateTime? now}) {
+    if (application.status != ApplicationStatus.accepted ||
+        application.isCompleted) {
+      return false;
+    }
+
+    final completionTime = getApplicationCompletionTime(application);
+    if (completionTime == null) return false;
+
+    final currentTime = now ?? DateTime.now();
+    return !completionTime.isAfter(currentTime);
+  }
+
+  HistoricalRatingSummary getHistoricalRatingSummary(String applicantName) {
+    final normalizedApplicantName = applicantName.trim().toLowerCase();
+    final ratedApplications =
+        _applications
+            .where(
+              (application) =>
+                  application.applicantName.trim().toLowerCase() ==
+                      normalizedApplicantName &&
+                  application.isCompleted &&
+                  application.rating != null,
+            )
+            .toList()
+          ..sort((a, b) {
+            final firstTimestamp = a.ratedAt ?? a.createdAt;
+            final secondTimestamp = b.ratedAt ?? b.createdAt;
+            return secondTimestamp.compareTo(firstTimestamp);
+          });
+
+    if (ratedApplications.isEmpty) {
+      return const HistoricalRatingSummary.empty();
+    }
+
+    double totalScore = 0;
+    double totalWeighted = 0;
+
+    for (final app in ratedApplications) {
+      final overall = app.rating ?? 0;
+      totalScore += overall;
+
+      final punctuality = app.ratingPunctuality ?? overall;
+      final quality = app.ratingQuality ?? overall;
+      final attitude = app.ratingAttitude ?? overall;
+      totalWeighted += quality * 0.4 + punctuality * 0.3 + attitude * 0.3;
+    }
+
+    final count = ratedApplications.length;
+    final lastRatedApplication = ratedApplications.first;
+
+    return HistoricalRatingSummary(
+      averageRating: totalScore / count,
+      weightedRating: totalWeighted / count,
+      ratedJobsCount: count,
+      lastRating: lastRatedApplication.rating,
+      lastRatedAt: lastRatedApplication.ratedAt,
+    );
+  }
 
   Future<void> loadOffersFromBackend() async {
+    await loadStaffWorkspace();
+  }
+
+  Future<void> loadStaffWorkspace() async {
+    final token = _authToken;
+    if (token == null) return;
+
     try {
-      final offers = await ApiService.getOffers();
-      _offers.clear();
-      _offers.addAll(offers);
+      final myOffers = await ApiService.getMyOffers(token);
+      final applicationsByOffer = await Future.wait(
+        myOffers.map((offer) => ApiService.getApplicationsByOffer(offer.id)),
+      );
+
+      _offers
+        ..clear()
+        ..addAll(myOffers);
+
+      _applications
+        ..clear()
+        ..addAll(applicationsByOffer.expand((applications) => applications));
+
       notifyListeners();
     } on ApiException {
-      // Mantener los datos existentes si el backend no responde
+      // Keep the previous local state if the backend is unavailable.
     }
   }
 
@@ -120,53 +243,61 @@ class AppState extends ChangeNotifier {
 
   void removeOffer(String offerId) {
     _offers.removeWhere((o) => o.id == offerId);
+    _applications.removeWhere((a) => a.offerId == offerId);
     notifyListeners();
   }
 
-  // ── APPLICATIONS ──────────────────────────────────────────────────────────
-
-  /// Updates status and adds an in-app notification + fires an OS banner.
   Future<void> setApplicationStatus(
-      String appId, ApplicationStatus newStatus) async {
+    String appId,
+    ApplicationStatus newStatus,
+  ) async {
     final idx = _applications.indexWhere((a) => a.id == appId);
     if (idx == -1) return;
 
     _applications[idx].status = newStatus;
-
     final app = _applications[idx];
 
     if (newStatus == ApplicationStatus.accepted) {
-      _addNotification(AppNotification(
-        id: 'n${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Aplicación aceptada',
-        body: '${app.applicantName} fue aceptado/a para "${app.offerTitle}".',
-        type: NotificationType.appAccepted,
-        createdAt: DateTime.now(),
-        relatedId: appId,
-      ));
-      // Simulate student notification
-      _addNotification(AppNotification(
-        id: 'n${DateTime.now().millisecondsSinceEpoch + 1}',
-        title: 'Alerta estudiante',
-        body:
-            '${app.applicantName} recibió su notificación de aceptación en "${app.offerTitle}".',
-        type: NotificationType.jobMatch,
-        createdAt: DateTime.now(),
-        relatedId: appId,
-      ));
+      _addNotification(
+        AppNotification(
+          id: 'n${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Aplicacion aceptada',
+          body: '${app.applicantName} fue aceptado/a para "${app.offerTitle}".',
+          type: NotificationType.appAccepted,
+          createdAt: DateTime.now(),
+          relatedId: appId,
+        ),
+      );
+      _addNotification(
+        AppNotification(
+          id: 'n${DateTime.now().millisecondsSinceEpoch + 1}',
+          title: 'Alerta estudiante',
+          body:
+              '${app.applicantName} recibio su notificacion de aceptacion en "${app.offerTitle}".',
+          type: NotificationType.jobMatch,
+          createdAt: DateTime.now(),
+          relatedId: appId,
+        ),
+      );
       NotificationService.onApplicationAccepted(
-          app.applicantName, app.offerTitle);
+        app.applicantName,
+        app.offerTitle,
+      );
     } else if (newStatus == ApplicationStatus.rejected) {
-      _addNotification(AppNotification(
-        id: 'n${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Aplicación rechazada',
-        body: '${app.applicantName} fue rechazado/a de "${app.offerTitle}".',
-        type: NotificationType.appRejected,
-        createdAt: DateTime.now(),
-        relatedId: appId,
-      ));
+      _addNotification(
+        AppNotification(
+          id: 'n${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Aplicacion rechazada',
+          body: '${app.applicantName} fue rechazado/a de "${app.offerTitle}".',
+          type: NotificationType.appRejected,
+          createdAt: DateTime.now(),
+          relatedId: appId,
+        ),
+      );
       NotificationService.onApplicationRejected(
-          app.applicantName, app.offerTitle);
+        app.applicantName,
+        app.offerTitle,
+      );
     }
 
     notifyListeners();
@@ -183,23 +314,26 @@ class AppState extends ChangeNotifier {
     String sortBy = 'gpa',
   }) {
     var list = getApplicationsByOffer(offerId);
-    if (minGpa != null) list = list.where((a) => a.gpa >= minGpa).toList();
-    if (semester != null) list = list.where((a) => a.semester == semester).toList();
+    if (minGpa != null) {
+      list = list.where((a) => a.gpa >= minGpa).toList();
+    }
+    if (semester != null) {
+      list = list.where((a) => a.semester == semester).toList();
+    }
     if (availability != null && availability.isNotEmpty) {
       list = list.where((a) => a.availability == availability).toList();
     }
-    list.sort((a, b) => switch (sortBy) {
-          'semester' => a.semester.compareTo(b.semester),
-          'date' => b.createdAt.compareTo(a.createdAt),
-          _ => b.gpa.compareTo(a.gpa),
-        });
+    list.sort(
+      (a, b) => switch (sortBy) {
+        'semester' => a.semester.compareTo(b.semester),
+        'date' => b.createdAt.compareTo(a.createdAt),
+        _ => b.gpa.compareTo(a.gpa),
+      },
+    );
     return list;
   }
 
-  // ── RATING (Feature 8) ────────────────────────────────────────────────────
-
-  /// Marks an accepted application as completed and saves the professor's rating.
-  Future<void> completeAndRate({
+  Future<bool> completeAndRate({
     required String appId,
     required double rating,
     required String feedback,
@@ -208,9 +342,13 @@ class AppState extends ChangeNotifier {
     required double attitude,
   }) async {
     final idx = _applications.indexWhere((a) => a.id == appId);
-    if (idx == -1) return;
+    if (idx == -1) return false;
 
     final app = _applications[idx];
+    if (!canRateApplication(app)) {
+      return false;
+    }
+
     app.isCompleted = true;
     app.rating = rating;
     app.ratingFeedback = feedback;
@@ -219,43 +357,39 @@ class AppState extends ChangeNotifier {
     app.ratingAttitude = attitude;
     app.ratedAt = DateTime.now();
 
-    _addNotification(AppNotification(
-      id: 'n${DateTime.now().millisecondsSinceEpoch}',
-      title: 'Calificación enviada',
-      body:
-          'Calificaste a ${app.applicantName} con ${rating.toStringAsFixed(1)} estrellas en "${app.offerTitle}".',
-      type: NotificationType.ratingSubmitted,
-      createdAt: DateTime.now(),
-      relatedId: appId,
-    ));
+    _addNotification(
+      AppNotification(
+        id: 'n${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Calificacion enviada',
+        body:
+            'Calificaste a ${app.applicantName} con ${rating.toStringAsFixed(1)} estrellas en "${app.offerTitle}".',
+        type: NotificationType.ratingSubmitted,
+        createdAt: DateTime.now(),
+        relatedId: appId,
+      ),
+    );
 
     NotificationService.onRatingSubmitted(app.applicantName, rating);
 
     notifyListeners();
+    return true;
   }
 
-  // ── NOTIFICATIONS (Feature 7) ─────────────────────────────────────────────
+  void _addNotification(AppNotification notification) {
+    _notifications.insert(0, notification);
+  }
 
-  void _addNotification(AppNotification n) => _notifications.insert(0, n);
-
-  /// Call this from the offer form after a successful publish.
   void onOfferPublished(OfferModel offer) {
-    _addNotification(AppNotification(
-      id: 'n${DateTime.now().millisecondsSinceEpoch}',
-      title: 'Oferta publicada',
-      body: '"${offer.title}" ya está visible para los estudiantes.',
-      type: NotificationType.offerPublished,
-      createdAt: DateTime.now(),
-      relatedId: offer.id,
-    ));
-    _addNotification(AppNotification(
-      id: 'n${DateTime.now().millisecondsSinceEpoch + 1}',
-      title: 'Alerta estudiante',
-      body: 'Ana (Psicología, 19) recibió una alerta sobre "${offer.title}".',
-      type: NotificationType.jobMatch,
-      createdAt: DateTime.now(),
-      relatedId: offer.id,
-    ));
+    _addNotification(
+      AppNotification(
+        id: 'n${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Oferta publicada',
+        body: '"${offer.title}" ya esta visible para los estudiantes.',
+        type: NotificationType.offerPublished,
+        createdAt: DateTime.now(),
+        relatedId: offer.id,
+      ),
+    );
     notifyListeners();
   }
 
@@ -267,157 +401,9 @@ class AppState extends ChangeNotifier {
   }
 
   void markAllNotificationsRead() {
-    for (final n in _notifications) {
-      n.isRead = true;
+    for (final notification in _notifications) {
+      notification.isRead = true;
     }
     notifyListeners();
-  }
-
-  // ── SEED ──────────────────────────────────────────────────────────────────
-
-  void _seedMockData() {
-    final now = DateTime.now();
-
-    _offers.addAll([
-      OfferModel(
-        id: 'of1',
-        title: 'Monitoría de Cálculo',
-        description:
-            'Se busca monitor para acompañar a estudiantes de primer año en Cálculo Integral y Multivariable.',
-        requirements:
-            'Haber cursado Cálculo I con nota >= 4.0\nDisponibilidad presencial martes y jueves\nExperiencia en tutorías (deseable)',
-        category: 'Académico',
-        valueCop: 60000,
-        dateTime: now.add(const Duration(days: 2)),
-        deadline: now.add(const Duration(days: 10)),
-        durationHours: 2,
-        isOnSite: true,
-        location: 'Edificio ML, Salón ML-204',
-      ),
-      OfferModel(
-        id: 'of2',
-        title: 'Asistente de Biblioteca',
-        description:
-            'Apoyo en catalogación, atención al usuario y organización de material bibliográfico.',
-        requirements:
-            'Estudiante de cualquier carrera\nDisponibilidad lunes a viernes tarde\nHabilidades de servicio al cliente',
-        category: 'Administrativo',
-        valueCop: 50000,
-        dateTime: now.add(const Duration(days: 4)),
-        deadline: now.add(const Duration(days: 14)),
-        durationHours: 3,
-        isOnSite: false,
-        location: '',
-      ),
-    ]);
-
-    _applications.addAll([
-      ApplicationModel(
-        id: 'ap1',
-        applicantName: 'Juan Pérez',
-        applicantInitials: 'JP',
-        offerId: 'of1',
-        offerTitle: 'Monitoría de Cálculo',
-        createdAt: now.subtract(const Duration(hours: 3)),
-        status: ApplicationStatus.pending,
-        gpa: 4.5,
-        semester: 5,
-        career: 'Ing. de Sistemas',
-        availability: 'part_time',
-        motivationLetter:
-            'Tengo excelente desempeño en Cálculo y me apasiona enseñar. Ayudé a grupos de estudio el semestre pasado con muy buenos resultados.',
-      ),
-      ApplicationModel(
-        id: 'ap2',
-        applicantName: 'María García',
-        applicantInitials: 'MG',
-        offerId: 'of2',
-        offerTitle: 'Asistente de Biblioteca',
-        createdAt: now.subtract(const Duration(days: 1)),
-        status: ApplicationStatus.accepted,
-        gpa: 4.1,
-        semester: 4,
-        career: 'Literatura',
-        availability: 'flexible',
-        motivationLetter:
-            'Soy organizada y me encanta el ambiente de la biblioteca.',
-        isCompleted: true,
-        rating: 4.3,
-        ratingFeedback:
-            'Excelente actitud y puntualidad. Terminó todas las tareas antes del plazo.',
-        ratingPunctuality: 5.0,
-        ratingQuality: 4.0,
-        ratingAttitude: 4.5,
-        ratedAt: now.subtract(const Duration(hours: 2)),
-      ),
-      ApplicationModel(
-        id: 'ap3',
-        applicantName: 'Carlos Ruiz',
-        applicantInitials: 'CR',
-        offerId: 'of1',
-        offerTitle: 'Monitoría de Cálculo',
-        createdAt: now.subtract(const Duration(days: 2)),
-        status: ApplicationStatus.pending,
-        gpa: 3.8,
-        semester: 6,
-        career: 'Matemáticas',
-        availability: 'full_time',
-        motivationLetter:
-            'Cursé Cálculo I, II y III con notas superiores a 4.5.',
-      ),
-      ApplicationModel(
-        id: 'ap4',
-        applicantName: 'Laura Molina',
-        applicantInitials: 'LM',
-        offerId: 'of1',
-        offerTitle: 'Monitoría de Cálculo',
-        createdAt: now.subtract(const Duration(hours: 10)),
-        status: ApplicationStatus.pending,
-        gpa: 4.8,
-        semester: 7,
-        career: 'Física',
-        availability: 'part_time',
-        motivationLetter:
-            'Soy monitora certificada por el Centro de Español.',
-      ),
-    ]);
-
-    // Seed notifications
-    _notifications.addAll([
-      AppNotification(
-        id: 'sn1',
-        title: 'Nueva postulación',
-        body: 'Laura Molina aplicó a "Monitoría de Cálculo".',
-        type: NotificationType.newApplication,
-        createdAt: now.subtract(const Duration(hours: 10)),
-        relatedId: 'ap4',
-      ),
-      AppNotification(
-        id: 'sn2',
-        title: 'Nueva postulación',
-        body: 'Juan Pérez aplicó a "Monitoría de Cálculo".',
-        type: NotificationType.newApplication,
-        createdAt: now.subtract(const Duration(hours: 3)),
-        relatedId: 'ap1',
-      ),
-      AppNotification(
-        id: 'sn3',
-        title: 'Alerta estudiante',
-        body: 'Ana (Psicología, 19) recibió una alerta sobre "Monitoría de Cálculo".',
-        type: NotificationType.jobMatch,
-        createdAt: now.subtract(const Duration(days: 2)),
-        relatedId: 'of1',
-        isRead: true,
-      ),
-      AppNotification(
-        id: 'sn4',
-        title: 'Calificación enviada',
-        body: 'Calificaste a María García con 4.3 estrellas en "Asistente de Biblioteca".',
-        type: NotificationType.ratingSubmitted,
-        createdAt: now.subtract(const Duration(hours: 2)),
-        relatedId: 'ap2',
-        isRead: true,
-      ),
-    ]);
   }
 }

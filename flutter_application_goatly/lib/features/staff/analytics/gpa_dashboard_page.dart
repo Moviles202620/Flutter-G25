@@ -140,7 +140,9 @@ class _GpaCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               item.category!,
-              style: const TextStyle(color: AppColors.greyText, fontSize: 14),
+              style: TextStyle(
+                  color: isDark ? AppColors.darkGreyText : AppColors.greyText,
+                  fontSize: 14),
             ),
           ],
           const SizedBox(height: 14),
@@ -171,8 +173,10 @@ class _GpaCard extends StatelessWidget {
                   children: [
                     Text(
                       context.t('avg_gpa'),
-                      style: const TextStyle(
-                        color: AppColors.greyText,
+                      style: TextStyle(
+                        color: isDark
+                            ? AppColors.darkGreyText
+                            : AppColors.greyText,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),

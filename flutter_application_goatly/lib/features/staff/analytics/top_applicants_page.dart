@@ -196,7 +196,9 @@ class _LeaderboardCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '${applicant.career} • Sem. ${applicant.semester}',
-                  style: const TextStyle(color: AppColors.greyText, fontSize: 13),
+                  style: TextStyle(
+                      color: isDark ? AppColors.darkGreyText : AppColors.greyText,
+                      fontSize: 13),
                 ),
                 const SizedBox(height: 6),
                 Row(
@@ -232,12 +234,12 @@ class _LeaderboardCard extends StatelessWidget {
                     color: Color(0xFF9A5B00),
                   ),
                 ),
-                const Text(
+                Text(
                   'GPA',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.greyText,
+                    color: isDark ? AppColors.darkGreyText : AppColors.greyText,
                   ),
                 ),
               ],

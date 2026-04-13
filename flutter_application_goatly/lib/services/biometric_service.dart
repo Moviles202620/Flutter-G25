@@ -8,6 +8,7 @@ class BiometricService {
 
   static const _keyEnabled = 'biometric_enabled';
   static const _keyEmail = 'biometric_email';
+  static const _keyRefreshToken = 'biometric_refresh_token';
 
   // ── Hardware & enrollment check ──────────────────────────────────────────
 
@@ -84,10 +85,21 @@ class BiometricService {
     return prefs.getString(_keyEmail);
   }
 
+  static Future<void> saveRefreshToken(String refreshToken) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyRefreshToken, refreshToken);
+  }
+
+  static Future<String?> getSavedRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyRefreshToken);
+  }
+
   /// Clear all stored biometric preferences (called on logout).
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyEnabled);
     await prefs.remove(_keyEmail);
+    await prefs.remove(_keyRefreshToken);
   }
 }

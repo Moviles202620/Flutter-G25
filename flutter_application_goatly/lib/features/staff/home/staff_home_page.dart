@@ -15,7 +15,9 @@ class StaffHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final apps = context.watch<AppState>().pendingApplications;
+    final state = context.watch<AppState>();
+    final apps = state.pendingApplications;
+    final activeOffers = state.offers.length;
     context.watch<SettingsState>(); // Escuchar cambios de idioma y tema
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -40,7 +42,7 @@ class StaffHomePage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.search, size: 26),
-            tooltip: 'Buscar aplicaciones',
+            tooltip: context.t('search_tooltip'),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -85,14 +87,21 @@ class StaffHomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: apps.isEmpty ? const _EmptyState() : _HomeWithApps(apps: apps),
+      body: apps.isEmpty
+          ? const _EmptyState()
+          : _HomeWithApps(apps: apps, activeOffers: activeOffers),
     );
   }
 }
 
 class _HomeWithApps extends StatelessWidget {
   final List<ApplicationModel> apps;
-  const _HomeWithApps({required this.apps});
+  final int activeOffers;
+
+  const _HomeWithApps({
+    required this.apps,
+    required this.activeOffers,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +115,7 @@ class _HomeWithApps extends StatelessWidget {
       children: [
         _ActivitySummaryCard(
           pendingCount: apps.where((a) => a.status == ApplicationStatus.pending).length,
-          activeOffers: 2,
+          activeOffers: activeOffers,
           surfaceColor: surfaceColor,
           borderColor: borderColor,
         ),
@@ -176,9 +185,9 @@ class _ActivitySummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'RESUMEN DE ACTIVIDAD',
-            style: TextStyle(letterSpacing: 1.4, color: Color(0xFF9AA4B2), fontWeight: FontWeight.w800),
+          Text(
+            context.t('activity_summary'),
+            style: const TextStyle(letterSpacing: 1.4, color: Color(0xFF9AA4B2), fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 16),
           Row(
@@ -186,14 +195,14 @@ class _ActivitySummaryCard extends StatelessWidget {
               Expanded(
                 child: _Metric(
                   value: pendingCount.toString(),
-                  label: 'Aplicaciones pendientes',
+                  label: context.t('pending_applications'),
                 ),
               ),
               Container(width: 1, height: 50, color: borderColor),
               Expanded(
                 child: _Metric(
                   value: activeOffers.toString(),
-                  label: 'Ofertas activas',
+                  label: context.t('active_offers'),
                 ),
               ),
             ],
@@ -240,9 +249,9 @@ class _ApplicationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusText = switch (app.status) {
-      ApplicationStatus.pending => 'PENDIENTE',
-      ApplicationStatus.accepted => 'ACEPTADA',
-      ApplicationStatus.rejected => 'RECHAZADA',
+      ApplicationStatus.pending => context.t('chip_pending'),
+      ApplicationStatus.accepted => context.t('chip_accepted'),
+      ApplicationStatus.rejected => context.t('chip_rejected'),
     };
 
     final statusColor = switch (app.status) {
@@ -351,9 +360,9 @@ class _EmptyState extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               icon: const Icon(Icons.add, size: 22),
-              label: const Text(
-                'Crear una oferta',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              label: Text(
+                context.t('create_offer_action'),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
             ),
           ),

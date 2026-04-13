@@ -19,6 +19,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   String? _selectedDepartment;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -34,8 +35,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     super.dispose();
   }
 
-  bool _saving = false;
-
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -46,10 +45,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final name = _nameController.text.trim();
     final department = _selectedDepartment!;
 
-    // Update locally
     appState.updateUserProfile(name: name, department: department);
 
-    // Sync with backend if token available
     final token = appState.authToken;
     if (token != null) {
       try {
@@ -70,6 +67,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         SnackBar(
           content: Text(context.t('profile_updated')),
           backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       Navigator.pop(context);
@@ -79,20 +77,26 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AppState>().user;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppColors.darkSurface : AppColors.surface;
+    final background = isDark ? AppColors.darkBackground : AppColors.background;
+    final border = isDark ? AppColors.darkBorder : AppColors.border;
+    final textColor = isDark ? AppColors.darkModeText : AppColors.darkText;
+    final secondary = isDark ? AppColors.darkGreyText : AppColors.greyText;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: background,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: AppColors.surface,
+        backgroundColor: surface,
+        surfaceTintColor: surface,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Editar Perfil',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          context.t('edit_profile_title'),
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         centerTitle: true,
       ),
@@ -115,10 +119,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         color: AppColors.primaryYellow,
                         shape: BoxShape.circle,
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Text(
-                          'FU',
-                          style: TextStyle(
+                          (user?.name.isNotEmpty == true)
+                              ? user!.name.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase()
+                              : 'FU',
+                          style: const TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.w900,
                             color: Colors.white,
@@ -135,7 +141,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         decoration: BoxDecoration(
                           color: AppColors.primaryYellow,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(color: surface, width: 2),
                         ),
                         child: const Icon(
                           Icons.camera_alt,
@@ -151,36 +157,33 @@ class _EditProfilePageState extends State<EditProfilePage> {
               const SizedBox(height: 32),
 
               // Email (Read-only)
-              const Text(
+              Text(
                 'Email',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.darkText,
+                  color: textColor,
                 ),
               ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: AppColors.background,
+                  color: isDark ? const Color(0xFF1E1E1E) : AppColors.background,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: border),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.email_outlined, size: 20, color: AppColors.greyText),
+                    Icon(Icons.email_outlined, size: 20, color: secondary),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         user?.email ?? '',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: AppColors.greyText,
-                        ),
+                        style: TextStyle(fontSize: 16, color: secondary),
                       ),
                     ),
-                    const Icon(Icons.lock_outline, size: 18, color: AppColors.greyText),
+                    Icon(Icons.lock_outline, size: 18, color: secondary),
                   ],
                 ),
               ),
@@ -188,37 +191,44 @@ class _EditProfilePageState extends State<EditProfilePage> {
               const SizedBox(height: 24),
 
               // Name
-              const Text(
-                'Nombre completo',
+              Text(
+                context.t('full_name'),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.darkText,
+                  color: textColor,
                 ),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _nameController,
                 maxLength: 50,
+                style: TextStyle(color: textColor),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]')),
+                  FilteringTextInputFormatter.allow(
+                    RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]'),
+                  ),
                 ],
                 decoration: InputDecoration(
-                  hintText: 'Ingresa tu nombre',
-                  prefixIcon: const Icon(Icons.person_outline),
+                  hintText: context.t('hint_name'),
+                  hintStyle: TextStyle(color: secondary),
+                  prefixIcon: Icon(Icons.person_outline, color: secondary),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
+                    borderSide: BorderSide(color: border),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
+                    borderSide: BorderSide(color: border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primaryYellow, width: 2),
+                    borderSide: const BorderSide(
+                      color: AppColors.primaryYellow,
+                      width: 2,
+                    ),
                   ),
                   errorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -231,13 +241,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'El nombre es obligatorio';
+                    return context.t('err_name_required');
                   }
                   if (value.trim().length < 3) {
-                    return 'El nombre debe tener al menos 3 caracteres';
+                    return context.t('err_name_min');
                   }
                   if (!RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$').hasMatch(value)) {
-                    return 'El nombre solo puede contener letras';
+                    return context.t('err_name_letters_only');
                   }
                   return null;
                 },
@@ -246,48 +256,53 @@ class _EditProfilePageState extends State<EditProfilePage> {
               const SizedBox(height: 24),
 
               // Department
-              const Text(
-                'Departamento',
+              Text(
+                context.t('department'),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.darkText,
+                  color: textColor,
                 ),
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _selectedDepartment,
+                initialValue: _selectedDepartment,
+                dropdownColor: surface,
+                style: TextStyle(color: textColor, fontSize: 16),
                 decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.business_outlined),
+                  prefixIcon: Icon(Icons.business_outlined, color: secondary),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
+                    borderSide: BorderSide(color: border),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
+                    borderSide: BorderSide(color: border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primaryYellow, width: 2),
+                    borderSide: const BorderSide(
+                      color: AppColors.primaryYellow,
+                      width: 2,
+                    ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.danger),
                   ),
                 ),
                 items: Departments.all.map((department) {
                   return DropdownMenuItem(
                     value: department,
-                    child: Text(department),
+                    child: Text(department, style: TextStyle(color: textColor)),
                   );
                 }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedDepartment = value;
-                  });
-                },
+                onChanged: (value) => setState(() => _selectedDepartment = value),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Por favor selecciona un departamento';
+                    return context.t('err_dept_required');
                   }
                   return null;
                 },
@@ -302,19 +317,28 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   onPressed: _saving ? null : _saveProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryYellow,
-                    foregroundColor: Colors.white,
+                    foregroundColor: Colors.black,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Guardar cambios',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.black,
+                          ),
+                        )
+                      : Text(
+                          context.t('save'),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                 ),
               ),
 
@@ -326,15 +350,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 child: OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.greyText,
-                    side: const BorderSide(color: AppColors.border),
+                    foregroundColor: secondary,
+                    side: BorderSide(color: border),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Cancelar',
-                    style: TextStyle(
+                  child: Text(
+                    context.t('cancel'),
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                     ),

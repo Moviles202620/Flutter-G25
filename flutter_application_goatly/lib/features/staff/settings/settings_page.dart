@@ -95,7 +95,7 @@ class SettingsPage extends StatelessWidget {
           _TapableSetting(
             icon: Icons.privacy_tip_rounded,
             title: settings.getString('privacy'),
-            subtitle: 'Ver detalles',
+            subtitle: settings.getString('view_details_btn'),
             surfaceColor: surfaceColor,
             borderColor: borderColor,
             onTap: () => _showPrivacyDialog(context),
@@ -109,7 +109,7 @@ class SettingsPage extends StatelessWidget {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: Text(settings.getString('logout')),
-                  content: const Text('¿Deseas cerrar sesión?'),
+                  content: Text(settings.getString('confirm_logout_msg')),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
@@ -118,10 +118,10 @@ class SettingsPage extends StatelessWidget {
                     TextButton(
                       onPressed: () {
                         Navigator.pop(ctx);
-                        Navigator.of(context).pushNamedAndRemoveUntil(
-                          '/login',
-                          (route) => false,
-                        );
+                        context.read<AppState>().logout();
+                        Navigator.of(
+                          context,
+                        ).pushNamedAndRemoveUntil('/login', (route) => false);
                       },
                       child: Text(
                         settings.getString('logout'),
@@ -137,7 +137,9 @@ class SettingsPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.danger.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppColors.danger.withValues(alpha: 0.3),
+                ),
               ),
               child: Center(
                 child: Text(
@@ -158,11 +160,15 @@ class SettingsPage extends StatelessWidget {
 
   /// Syncs dark mode & language preferences to the backend (fire-and-forget).
   void _syncPreferencesToBackend(BuildContext context) {
-    final token = context.read<AppState>().authToken;
-    if (token == null) return;
+    final appState = context.read<AppState>();
+    final token = appState.authToken;
+    final user = appState.user;
+    if (token == null || user == null) return;
     final s = context.read<SettingsState>();
     // ignore: unawaited_futures
     ApiService.updateUserProfile(token, {
+      'name': user.name,
+      'department': user.department,
       'language': s.language,
       'is_dark_mode': s.isDarkMode,
     }).then((_) {}).catchError((_) {}); // best-effort sync
@@ -270,8 +276,8 @@ class SettingsPage extends StatelessWidget {
 
               if (newPasswordCtrl.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('La contraseña no puede estar vacía'),
+                  SnackBar(
+                    content: Text(settings.getString('err_empty_password')),
                     backgroundColor: AppColors.danger,
                   ),
                 );
@@ -297,7 +303,9 @@ class SettingsPage extends StatelessWidget {
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(settings.getString('invalid_current_password')),
+                    content: Text(
+                      settings.getString('invalid_current_password'),
+                    ),
                     backgroundColor: AppColors.danger,
                   ),
                 );
@@ -326,18 +334,18 @@ class SettingsPage extends StatelessWidget {
                 style: const TextStyle(height: 1.5),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Datos personales y privacidad:',
-                style: TextStyle(fontWeight: FontWeight.w700),
+              Text(
+                settings.getString('privacy_data_title'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
-              const Text(
-                '• Tus datos están protegidos según las políticas de la Universidad '
-                'de los Andes.\n'
-                '• No compartimos tu información con terceros.\n'
-                '• Puedes solicitar la eliminación de tu cuenta en cualquier momento.\n'
-                '• Utilizamos encriptación para proteger tus credenciales.',
-                style: TextStyle(height: 1.6, fontSize: 14, color: AppColors.greyText),
+              Text(
+                settings.getString('privacy_data_body'),
+                style: const TextStyle(
+                  height: 1.6,
+                  fontSize: 14,
+                  color: AppColors.greyText,
+                ),
               ),
             ],
           ),
@@ -435,18 +443,24 @@ class _BiometricToggleTileState extends State<_BiometricToggleTile> {
               children: [
                 Text(
                   widget.settings.getString('biometric_auth'),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _loading
                       ? '...'
                       : !_available
-                          ? widget.settings.getString('biometric_not_available')
-                          : _enabled
-                              ? widget.settings.getString('biometric_subtitle_on')
-                              : widget.settings.getString('biometric_subtitle_off'),
-                  style: const TextStyle(fontSize: 13, color: AppColors.greyText),
+                      ? widget.settings.getString('biometric_not_available')
+                      : _enabled
+                      ? widget.settings.getString('biometric_subtitle_on')
+                      : widget.settings.getString('biometric_subtitle_off'),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.greyText,
+                  ),
                 ),
               ],
             ),
@@ -544,7 +558,10 @@ class _TapableSetting extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(

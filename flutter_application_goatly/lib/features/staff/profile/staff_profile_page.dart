@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../app/localization.dart';
 import '../../../app/routes.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
+import '../../../data/settings_state.dart';
 import '../../../models/application_model.dart';
 import '../home/application_detail_page.dart';
 import 'edit_profile_page.dart';
@@ -10,16 +12,50 @@ import 'edit_profile_page.dart';
 class StaffProfilePage extends StatelessWidget {
   const StaffProfilePage({super.key});
 
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          context.t('logout_confirm_title'),
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        content: Text(context.t('logout_confirm_body')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            child: Text(
+              context.t('logout'),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      context.read<AppState>().logout();
+      Navigator.pushNamedAndRemoveUntil(context, Routes.login, (r) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    context.watch<SettingsState>();
     final user = state.user;
 
     final accepted = state.acceptedApplications;
-    
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+    final statValueColor = isDark ? AppColors.darkModeText : AppColors.darkText;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -41,7 +77,10 @@ class StaffProfilePage extends StatelessWidget {
                 child: const Center(
                   child: Text(
                     'FU',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white),
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white),
                   ),
                 ),
               ),
@@ -57,7 +96,7 @@ class StaffProfilePage extends StatelessWidget {
             const SizedBox(height: 4),
             Center(
               child: Text(
-                user?.department ?? 'Departamento',
+                user?.department ?? 'Administrativo',
                 style: const TextStyle(color: AppColors.greyText, fontSize: 15),
               ),
             ),
@@ -77,12 +116,13 @@ class StaffProfilePage extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _SoftButton(
-                      text: 'Editar perfil',
+                      text: context.t('edit_profile'),
                       filled: true,
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const EditProfilePage()),
+                          MaterialPageRoute(
+                              builder: (_) => const EditProfilePage()),
                         );
                       },
                     ),
@@ -90,7 +130,7 @@ class StaffProfilePage extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _SoftButton(
-                      text: 'Configuración',
+                      text: context.t('settings'),
                       filled: false,
                       onTap: () {
                         Navigator.pushNamed(context, Routes.settings);
@@ -104,14 +144,14 @@ class StaffProfilePage extends StatelessWidget {
             const SizedBox(height: 14),
             Divider(height: 1, color: borderColor),
 
-            // Stats (dinámico)
+            // Stats
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
               child: Row(
                 children: [
                   Expanded(
                     child: _StatCard(
-                      title: 'ACEPTADAS',
+                      title: context.t('stat_accepted'),
                       value: state.acceptedApplications.length.toString(),
                       valueColor: AppColors.primaryYellow,
                     ),
@@ -119,17 +159,17 @@ class StaffProfilePage extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _StatCard(
-                      title: 'PENDIENTES',
+                      title: context.t('stat_pending'),
                       value: state.pendingApplications.length.toString(),
-                      valueColor: AppColors.darkText,
+                      valueColor: statValueColor,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _StatCard(
-                      title: 'POSTS',
+                      title: context.t('stat_posts'),
                       value: state.offers.length.toString(),
-                      valueColor: AppColors.darkText,
+                      valueColor: statValueColor,
                     ),
                   ),
                 ],
@@ -138,7 +178,7 @@ class StaffProfilePage extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            // Aceptadas
+            // Accepted applications
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Container(
@@ -154,21 +194,25 @@ class StaffProfilePage extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
                       child: Row(
                         children: [
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Aplicaciones aceptadas (Pendientes)',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                              context.t('accepted_applications'),
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.w900),
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: AppColors.primaryYellow.withOpacity(0.2),
+                              color: AppColors.primaryYellow.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(999),
                             ),
-                            child: const Text(
-                              'HOY',
-                              style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF9A5B00)),
+                            child: Text(
+                              context.t('today'),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF9A5B00)),
                             ),
                           ),
                         ],
@@ -177,13 +221,14 @@ class StaffProfilePage extends StatelessWidget {
                     Divider(height: 1, color: borderColor),
 
                     if (accepted.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(14, 14, 14, 14),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Aún no tienes aplicaciones aceptadas.\nAcepta una desde Home.',
-                            style: TextStyle(color: AppColors.greyText, height: 1.3),
+                            context.t('no_accepted'),
+                            style: const TextStyle(
+                                color: AppColors.greyText, height: 1.3),
                           ),
                         ),
                       )
@@ -196,20 +241,23 @@ class StaffProfilePage extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // Cerrar sesión real
+            // Logout button — red with confirmation dialog
             InkWell(
-              onTap: () {
-                context.read<AppState>().logout();
-                Navigator.pushNamedAndRemoveUntil(context, Routes.login, (r) => false);
-              },
+              onTap: () => _confirmLogout(context),
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 14),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.logout, size: 18, color: AppColors.greyText),
-                    SizedBox(width: 8),
-                    Text('Cerrar sesión', style: TextStyle(color: AppColors.greyText, fontSize: 16)),
+                  children: [
+                    const Icon(Icons.logout, size: 18, color: AppColors.danger),
+                    const SizedBox(width: 8),
+                    Text(
+                      context.t('logout'),
+                      style: const TextStyle(
+                          color: AppColors.danger,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700),
+                    ),
                   ],
                 ),
               ),
@@ -221,7 +269,8 @@ class StaffProfilePage extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildAcceptedList(BuildContext context, List<ApplicationModel> accepted) {
+  List<Widget> _buildAcceptedList(
+      BuildContext context, List<ApplicationModel> accepted) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
 
@@ -235,10 +284,12 @@ class StaffProfilePage extends StatelessWidget {
                 role: a.offerTitle,
                 isCompleted: a.isCompleted,
                 rating: a.rating,
+                completedLabel: context.t('completed_label'),
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => ApplicationDetailPage(app: a)),
+                    MaterialPageRoute(
+                        builder: (_) => ApplicationDetailPage(app: a)),
                   );
                 },
               ),
@@ -264,8 +315,11 @@ class _SoftButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = filled ? AppColors.primaryYellow.withOpacity(0.2) : (isDark ? AppColors.darkSurface : Colors.white);
-    final border = filled ? Colors.transparent : (isDark ? AppColors.darkBorder : AppColors.border);
+    final bg = filled
+        ? AppColors.primaryYellow.withValues(alpha: 0.2)
+        : (isDark ? AppColors.darkSurface : Colors.white);
+    final border =
+        filled ? Colors.transparent : (isDark ? AppColors.darkBorder : AppColors.border);
     final color = filled ? const Color(0xFF9A5B00) : AppColors.greyText;
 
     return SizedBox(
@@ -276,7 +330,8 @@ class _SoftButton extends StatelessWidget {
           backgroundColor: bg,
           foregroundColor: color,
           side: BorderSide(color: border),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         child: Text(text, style: const TextStyle(fontWeight: FontWeight.w800)),
       ),
@@ -300,6 +355,7 @@ class _StatCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+    final titleColor = isDark ? AppColors.darkGreyText : AppColors.greyText;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
@@ -311,9 +367,17 @@ class _StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(title, style: const TextStyle(fontSize: 12, color: AppColors.greyText, fontWeight: FontWeight.w800)),
+          Text(
+            title,
+            style: TextStyle(
+                fontSize: 12, color: titleColor, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: valueColor)),
+          Text(
+            value,
+            style: TextStyle(
+                fontSize: 22, fontWeight: FontWeight.w900, color: valueColor),
+          ),
         ],
       ),
     );
@@ -327,12 +391,14 @@ class _ProfileListTile extends StatelessWidget {
   final VoidCallback onTap;
   final bool isCompleted;
   final double? rating;
+  final String completedLabel;
 
   const _ProfileListTile({
     required this.initials,
     required this.name,
     required this.role,
     required this.onTap,
+    required this.completedLabel,
     this.isCompleted = false,
     this.rating,
   });
@@ -404,13 +470,12 @@ class _ProfileListTile extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.success
-                                .withValues(alpha: 0.12),
+                            color: AppColors.success.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Text(
-                            'Completado',
-                            style: TextStyle(
+                          child: Text(
+                            completedLabel,
+                            style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.success),

@@ -127,7 +127,7 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
                         child: Row(
                           children: [
                             _SemChip(
-                              label: 'Todos',
+                              label: context.t('all_option'),
                               selected: _semesterFilter == null,
                               onTap: () =>
                                   setState(() => _semesterFilter = null),

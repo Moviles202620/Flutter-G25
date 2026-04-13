@@ -170,8 +170,11 @@ class _InsightsPageState extends State<InsightsPage> {
                     Text(
                       item.label,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          color: AppColors.greyText, fontSize: 13),
+                      style: TextStyle(
+                          color: isDark
+                              ? AppColors.darkGreyText
+                              : AppColors.greyText,
+                          fontSize: 13),
                     ),
                   ],
                 ),
@@ -219,8 +222,9 @@ class _InsightsPageState extends State<InsightsPage> {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: AppColors.greyText,
+                  style: TextStyle(
+                    color:
+                        isDark ? AppColors.darkGreyText : AppColors.greyText,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -238,8 +242,11 @@ class _InsightsPageState extends State<InsightsPage> {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                        color: AppColors.greyText, fontSize: 12),
+                    style: TextStyle(
+                        color: isDark
+                            ? AppColors.darkGreyText
+                            : AppColors.greyText,
+                        fontSize: 12),
                   ),
                 ],
               ],
