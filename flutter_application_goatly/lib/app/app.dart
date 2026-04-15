@@ -21,7 +21,7 @@ class GoatlyApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,
-            themeMode: settings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            themeMode: settings.themeMode,
             initialRoute: Routes.login,
             routes: Routes.map,
           );

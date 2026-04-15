@@ -51,8 +51,11 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
   }
 
   Future<void> _handlePasswordLogin() async {
+    final navigator = Navigator.of(context);
+    final settings = context.read<SettingsState>();
     final email = _emailCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
+    final invalidCredentialsMsg = context.t('err_invalid_credentials');
 
     if (email.isEmpty || password.isEmpty) {
       _showError(context.t('err_fill_fields'));
@@ -69,11 +72,11 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
     }
 
     if (!ok) {
-      _showError(context.t('err_invalid_credentials'));
+      _showError(invalidCredentialsMsg);
       return;
     }
 
-    _syncPreferencesFromBackend(appState);
+    _syncPreferencesFromBackend(appState, settings);
     await BiometricService.saveEmail(email);
     final refreshToken = appState.refreshToken;
     if (refreshToken != null) {
@@ -87,13 +90,14 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
     }
 
     if (mounted) {
-      Navigator.pushReplacementNamed(context, Routes.shell);
+      navigator.pushReplacementNamed(Routes.shell);
     }
   }
 
   Future<void> _handleBiometricLogin() async {
     final settings = context.read<SettingsState>();
     final appState = context.read<AppState>();
+    final navigator = Navigator.of(context);
     final noSessionMsg = context.t('err_no_biometric_session');
     final restoreFailMsg = context.t('err_restore_session');
 
@@ -123,8 +127,8 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
       return;
     }
 
-    _syncPreferencesFromBackend(appState);
-    Navigator.pushReplacementNamed(context, Routes.shell);
+    _syncPreferencesFromBackend(appState, settings);
+    navigator.pushReplacementNamed(Routes.shell);
   }
 
   Future<void> _offerBiometricEnrollment() async {
@@ -202,16 +206,22 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
     }
   }
 
-  void _syncPreferencesFromBackend(AppState appState) {
+  void _syncPreferencesFromBackend(
+    AppState appState,
+    SettingsState settings,
+  ) {
     final token = appState.authToken;
     if (token == null) return;
 
     ApiService.getUserProfile(token)
         .then((profile) {
           if (!mounted) return;
-          final settings = context.read<SettingsState>();
-          settings.setDarkMode(profile.isDarkMode);
-          settings.setLanguage(profile.language);
+          if (settings.themePreference != 'system') {
+            settings.setDarkMode(profile.isDarkMode);
+          }
+          if (settings.languagePreference != 'system') {
+            settings.setLanguage(profile.language);
+          }
         })
         .catchError((_) {});
   }

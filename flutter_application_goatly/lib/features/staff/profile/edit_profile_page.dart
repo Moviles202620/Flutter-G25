@@ -1,5 +1,9 @@
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../app/localization.dart';
 import '../../../app/theme.dart';
@@ -17,9 +21,17 @@ class EditProfilePage extends StatefulWidget {
 
 class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
+  final ImagePicker _imagePicker = ImagePicker();
   late TextEditingController _nameController;
   String? _selectedDepartment;
+  Uint8List? _avatarBytes;
   bool _saving = false;
+
+  bool get _supportsCameraCapture {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
 
   String _normalizeDepartment(String? department) {
     if (department == null) return Departments.all.first;
@@ -47,6 +59,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final user = context.read<AppState>().user;
     _nameController = TextEditingController(text: user?.name ?? '');
     _selectedDepartment = _normalizeDepartment(user?.department);
+    _avatarBytes = context.read<AppState>().profileImageBytes;
   }
 
   @override
@@ -94,6 +107,109 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
+  String _initialsFor(String? name) {
+    final trimmed = (name ?? '').trim();
+    if (trimmed.isEmpty) return 'FU';
+    final parts = trimmed.split(RegExp(r'\s+')).where((part) => part.isNotEmpty);
+    return parts.take(2).map((part) => part[0]).join().toUpperCase();
+  }
+
+  Future<void> _showAvatarOptions() async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.greyText.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_supportsCameraCapture)
+                  ListTile(
+                    leading: const Icon(Icons.photo_camera_outlined),
+                    title: Text(context.t('take_photo')),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _pickAvatar(ImageSource.camera);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: Text(context.t('pick_gallery')),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _pickAvatar(ImageSource.gallery);
+                    },
+                  ),
+                if (_avatarBytes != null)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppColors.danger,
+                    ),
+                    title: Text(
+                      context.t('remove_photo'),
+                      style: const TextStyle(color: AppColors.danger),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _removeAvatar();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAvatar(ImageSource source) async {
+    final appState = context.read<AppState>();
+    final photoPickError = context.t('photo_pick_error');
+    try {
+      final file = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 80,
+        maxWidth: 1200,
+      );
+      if (file == null) return;
+
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() => _avatarBytes = bytes);
+      appState.setProfileImageBytes(bytes);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(photoPickError),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _removeAvatar() {
+    setState(() => _avatarBytes = null);
+    context.read<AppState>().setProfileImageBytes(null);
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AppState>().user;
@@ -130,47 +246,56 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
               // Avatar
               Center(
-                child: Stack(
-                  children: [
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primaryYellow,
-                        shape: BoxShape.circle,
+                child: GestureDetector(
+                  onTap: _showAvatarOptions,
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryYellow,
+                          shape: BoxShape.circle,
+                          image: _avatarBytes != null
+                              ? DecorationImage(
+                                  image: MemoryImage(_avatarBytes!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: _avatarBytes == null
+                            ? Center(
+                                child: Text(
+                                  _initialsFor(user?.name),
+                                  style: const TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
-                      child: Center(
-                        child: Text(
-                          (user?.name.isNotEmpty == true)
-                              ? user!.name.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase()
-                              : 'FU',
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w900,
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryYellow,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: surface, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            size: 16,
                             color: Colors.white,
                           ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryYellow,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: surface, width: 2),
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
 

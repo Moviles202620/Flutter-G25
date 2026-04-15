@@ -31,20 +31,14 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          // Dark Mode
-          _SettingTile(
+          // Theme
+          _TapableSetting(
             icon: Icons.dark_mode_rounded,
-            title: settings.getString('dark_mode'),
+            title: settings.getString('theme_mode'),
+            subtitle: _themeSubtitle(settings),
             surfaceColor: surfaceColor,
             borderColor: borderColor,
-            trailing: Switch(
-              value: settings.isDarkMode,
-              onChanged: (value) {
-                context.read<SettingsState>().setDarkMode(value);
-                _syncPreferencesToBackend(context);
-              },
-              activeThumbColor: AppColors.primaryYellow,
-            ),
+            onTap: () => _showThemeDialog(context),
           ),
           const SizedBox(height: 12),
 
@@ -52,9 +46,7 @@ class SettingsPage extends StatelessWidget {
           _TapableSetting(
             icon: Icons.language_rounded,
             title: settings.getString('language'),
-            subtitle: settings.language == 'es'
-                ? settings.getString('spanish')
-                : settings.getString('english'),
+            subtitle: _languageSubtitle(settings),
             surfaceColor: surfaceColor,
             borderColor: borderColor,
             onTap: () => _showLanguageDialog(context),
@@ -174,6 +166,67 @@ class SettingsPage extends StatelessWidget {
     }).then((_) {}).catchError((_) {}); // best-effort sync
   }
 
+  String _themeSubtitle(SettingsState settings) {
+    switch (settings.themePreference) {
+      case 'light':
+        return settings.getString('light_mode');
+      case 'dark':
+        return settings.getString('dark_mode_option');
+      default:
+        return settings.getString('follow_system');
+    }
+  }
+
+  String _languageSubtitle(SettingsState settings) {
+    switch (settings.languagePreference) {
+      case 'es':
+        return settings.getString('spanish');
+      case 'en':
+        return settings.getString('english');
+      default:
+        return settings.getString('system_language');
+    }
+  }
+
+  void _showThemeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final settings = context.read<SettingsState>();
+        return AlertDialog(
+          title: Text(settings.getString('theme_mode')),
+          content: RadioGroup<String>(
+            groupValue: settings.themePreference,
+            onChanged: (value) {
+              if (value != null) {
+                settings.setThemePreference(value);
+                _syncPreferencesToBackend(context);
+                Navigator.pop(ctx);
+              }
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: Text(settings.getString('follow_system')),
+                  leading: const Radio<String>(value: 'system'),
+                ),
+                ListTile(
+                  title: Text(settings.getString('light_mode')),
+                  leading: const Radio<String>(value: 'light'),
+                ),
+                ListTile(
+                  title: Text(settings.getString('dark_mode_option')),
+                  leading: const Radio<String>(value: 'dark'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _showLanguageDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -185,10 +238,10 @@ class SettingsPage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               RadioGroup<String>(
-                groupValue: settings.language,
+                groupValue: settings.languagePreference,
                 onChanged: (value) {
                   if (value != null) {
-                    settings.setLanguage(value);
+                    settings.setLanguagePreference(value);
                     _syncPreferencesToBackend(context);
                     Navigator.pop(ctx);
                   }
@@ -196,6 +249,10 @@ class SettingsPage extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    ListTile(
+                      title: Text(settings.getString('system_language')),
+                      leading: const Radio<String>(value: 'system'),
+                    ),
                     ListTile(
                       title: Text(settings.getString('spanish')),
                       leading: const Radio<String>(value: 'es'),
@@ -478,47 +535,6 @@ class _BiometricToggleTileState extends State<_BiometricToggleTile> {
 }
 
 // ── Reusable tile widgets ─────────────────────────────────────────────────────
-
-class _SettingTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Widget trailing;
-  final Color surfaceColor;
-  final Color borderColor;
-
-  const _SettingTile({
-    required this.icon,
-    required this.title,
-    required this.trailing,
-    required this.surfaceColor,
-    required this.borderColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.primaryYellow),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            ),
-          ),
-          trailing,
-        ],
-      ),
-    );
-  }
-}
 
 class _TapableSetting extends StatelessWidget {
   final IconData icon;

@@ -1,28 +1,96 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
-class SettingsState extends ChangeNotifier {
-  bool _isDarkMode = false;
-  String _language = 'es'; // 'es' o 'en'
+class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
+  String _themePreference = 'system'; // 'system' | 'light' | 'dark'
+  String _languagePreference = 'system'; // 'system' | 'es' | 'en'
   String _currentPassword = 'default1234'; // Contraseña inicial de prueba
 
-  bool get isDarkMode => _isDarkMode;
-  String get language => _language;
+  SettingsState() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  bool get isDarkMode {
+    switch (_themePreference) {
+      case 'dark':
+        return true;
+      case 'light':
+        return false;
+      default:
+        return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+    }
+  }
+  String get language => _effectiveLanguage;
+  String get themePreference => _themePreference;
+  String get languagePreference => _languagePreference;
+
+  ThemeMode get themeMode {
+    switch (_themePreference) {
+      case 'dark':
+        return ThemeMode.dark;
+      case 'light':
+        return ThemeMode.light;
+      default:
+        return ThemeMode.system;
+    }
+  }
+
+  String get _effectiveLanguage {
+    if (_languagePreference == 'es' || _languagePreference == 'en') {
+      return _languagePreference;
+    }
+
+    final systemCode =
+        WidgetsBinding.instance.platformDispatcher.locale.languageCode
+            .toLowerCase();
+    return systemCode.startsWith('en') ? 'en' : 'es';
+  }
 
   void toggleDarkMode() {
-    _isDarkMode = !_isDarkMode;
-    notifyListeners();
+    setThemePreference(isDarkMode ? 'light' : 'dark');
   }
 
   void setDarkMode(bool value) {
-    _isDarkMode = value;
-    notifyListeners();
+    setThemePreference(value ? 'dark' : 'light');
   }
 
   void setLanguage(String lang) {
-    if (lang == 'es' || lang == 'en') {
-      _language = lang;
+    setLanguagePreference(lang);
+  }
+
+  void setThemePreference(String value) {
+    if (value != 'system' && value != 'light' && value != 'dark') return;
+    if (_themePreference == value) return;
+    _themePreference = value;
+    notifyListeners();
+  }
+
+  void setLanguagePreference(String lang) {
+    if (lang == 'system' || lang == 'es' || lang == 'en') {
+      if (_languagePreference == lang) return;
+      _languagePreference = lang;
       notifyListeners();
     }
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    if (_themePreference == 'system') {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (_languagePreference == 'system') {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   /// Valida la contraseña actual y cambia a una nueva
@@ -41,7 +109,12 @@ class SettingsState extends ChangeNotifier {
       'es': {
         'settings': 'Configuración',
         'dark_mode': 'Modo oscuro',
+        'theme_mode': 'Tema',
+        'follow_system': 'Seguir sistema',
+        'light_mode': 'Claro',
+        'dark_mode_option': 'Oscuro',
         'language': 'Idioma',
+        'system_language': 'Idioma del sistema',
         'change_password': 'Cambiar contraseña',
         'biometric_auth': 'Autenticación biométrica',
         'biometric_subtitle_on': 'Huella o rostro activos',
@@ -245,6 +318,10 @@ class SettingsState extends ChangeNotifier {
         // ── Edit profile ──
         'edit_profile_title': 'Editar Perfil',
         'full_name': 'Nombre completo',
+        'take_photo': 'Tomar foto',
+        'pick_gallery': 'Escoger de galería',
+        'remove_photo': 'Eliminar foto',
+        'photo_pick_error': 'No se pudo cargar la foto de perfil',
         'err_name_required': 'El nombre es obligatorio',
         'err_name_min': 'El nombre debe tener al menos 3 caracteres',
         'err_name_letters_only': 'El nombre solo puede contener letras',
@@ -340,9 +417,19 @@ class SettingsState extends ChangeNotifier {
         // ── Offer lifecycle ──
         'offers': 'Ofertas',
         'filter_all': 'Todas',
-        'state_upcoming': 'No abierta',
+        'state_upcoming': 'Próximo',
         'state_active': 'Activa',
         'state_closed': 'Cerrada',
+        'state_badge_upcoming': 'Próximo',
+        'state_badge_active': 'Abierta',
+        'state_badge_closing_soon': 'Cierra pronto',
+        'state_badge_closed': 'Cerrada',
+        'no_upcoming_offers_title': 'No hay ofertas próximas',
+        'no_upcoming_offers_sub': 'Crea una oferta para verla aquí.',
+        'no_active_offers_title': 'No hay ofertas activas',
+        'no_active_offers_sub': 'Las ofertas activas aparecerán aquí.',
+        'no_closed_offers_title': 'No hay ofertas cerradas',
+        'no_closed_offers_sub': 'Las ofertas finalizadas aparecerán aquí.',
         'close_offer_btn': 'Cerrar labor ahora',
         'close_offer_confirm_title': 'Cerrar labor',
         'close_offer_confirm_body': '¿Deseas cerrar este labor antes de tiempo? Los estudiantes aceptados podrán ser calificados.',
@@ -372,7 +459,12 @@ class SettingsState extends ChangeNotifier {
       'en': {
         'settings': 'Settings',
         'dark_mode': 'Dark Mode',
+        'theme_mode': 'Theme',
+        'follow_system': 'Follow system',
+        'light_mode': 'Light',
+        'dark_mode_option': 'Dark',
         'language': 'Language',
+        'system_language': 'System language',
         'change_password': 'Change Password',
         'biometric_auth': 'Biometric Authentication',
         'biometric_subtitle_on': 'Fingerprint or face active',
@@ -576,6 +668,10 @@ class SettingsState extends ChangeNotifier {
         // ── Edit profile ──
         'edit_profile_title': 'Edit Profile',
         'full_name': 'Full name',
+        'take_photo': 'Take photo',
+        'pick_gallery': 'Choose from gallery',
+        'remove_photo': 'Remove photo',
+        'photo_pick_error': 'Could not load the profile photo',
         'err_name_required': 'Name is required',
         'err_name_min': 'Name must be at least 3 characters',
         'err_name_letters_only': 'Name can only contain letters',
@@ -671,9 +767,19 @@ class SettingsState extends ChangeNotifier {
         // ── Offer lifecycle ──
         'offers': 'Offers',
         'filter_all': 'All',
-        'state_upcoming': 'Upcoming',
+        'state_upcoming': 'Soon',
         'state_active': 'Active',
         'state_closed': 'Closed',
+        'state_badge_upcoming': 'Soon',
+        'state_badge_active': 'Open',
+        'state_badge_closing_soon': 'Closing soon',
+        'state_badge_closed': 'Closed',
+        'no_upcoming_offers_title': 'No upcoming offers',
+        'no_upcoming_offers_sub': 'Create an offer to see it here.',
+        'no_active_offers_title': 'No active offers',
+        'no_active_offers_sub': 'Active offers will appear here.',
+        'no_closed_offers_title': 'No closed offers',
+        'no_closed_offers_sub': 'Finished offers will appear here.',
         'close_offer_btn': 'Close Labor Now',
         'close_offer_confirm_title': 'Close Labor',
         'close_offer_confirm_body': 'Close this labor early? Accepted students can then be rated.',
@@ -702,6 +808,6 @@ class SettingsState extends ChangeNotifier {
       }
     };
 
-    return translations[_language]?[key] ?? key;
+    return translations[_effectiveLanguage]?[key] ?? key;
   }
 }
