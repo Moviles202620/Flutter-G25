@@ -134,6 +134,7 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
       durationHours: int.tryParse(_durationCtrl.text.trim()) ?? 0,
       isOnSite: _isOnSite,
       location: _isOnSite ? _locationCtrl.text.trim() : '',
+      createdAt: DateTime.now(),
     );
 
     final appState = context.read<AppState>();

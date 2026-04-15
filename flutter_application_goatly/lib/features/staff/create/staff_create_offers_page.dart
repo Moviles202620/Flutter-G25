@@ -7,7 +7,7 @@ import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
 import '../../../models/offer_model.dart';
 import '../../../services/api_service.dart';
-import '../home/applicant_list_page.dart';
+import 'offer_detail_page.dart';
 import 'edit_offer_page.dart';
 
 class StaffCreateOffersPage extends StatefulWidget {
@@ -18,6 +18,13 @@ class StaffCreateOffersPage extends StatefulWidget {
 }
 
 class _StaffCreateOffersPageState extends State<StaffCreateOffersPage> {
+  String _selectedState = 'all';
+
+  List<OfferModel> _filtered(List<OfferModel> all) {
+    if (_selectedState == 'all') return all;
+    return all.where((o) => o.state == _selectedState).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -28,44 +35,101 @@ class _StaffCreateOffersPageState extends State<StaffCreateOffersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final offers = context.watch<AppState>().offers;
-    context.watch<SettingsState>(); // Escuchar cambios
-
+    final allOffers = context.watch<AppState>().offers;
+    context.watch<SettingsState>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final appBarBg = isDark ? AppColors.darkSurface : AppColors.surface;
+    final surface = isDark ? AppColors.darkSurface : AppColors.surface;
+    final filtered = _filtered(allOffers.toList());
+
+    final counts = {
+      'all':      allOffers.length,
+      'upcoming': allOffers.where((o) => o.state == 'upcoming').length,
+      'active':   allOffers.where((o) => o.state == 'active').length,
+      'closed':   allOffers.where((o) => o.state == 'closed').length,
+    };
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: appBarBg,
-        surfaceTintColor: appBarBg,
+        backgroundColor: surface,
+        surfaceTintColor: surface,
         elevation: 0,
-        title: Text(
-          context.t('my_offers'),
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
+        title: Text(context.t('my_offers'), style: const TextStyle(fontWeight: FontWeight.w900)),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (offers.isEmpty)
-            _EmptyOffers(
-              isDark: isDark,
-            ),
-          ..._sortedByDeadline(offers).map((o) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ApplicantListPage(offer: o),
-                    ),
-                  ),
-                  child: _OfferCard(offer: o, isDark: isDark),
+          // ── State filter chips ──────────────────────────────────────────
+          SizedBox(
+            height: 52,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              children: [
+                _FilterChip(
+                  label: context.t('filter_all'),
+                  count: counts['all']!,
+                  selected: _selectedState == 'all',
+                  color: AppColors.greyText,
+                  onTap: () => setState(() => _selectedState = 'all'),
                 ),
-              )),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: context.t('state_upcoming'),
+                  count: counts['upcoming']!,
+                  selected: _selectedState == 'upcoming',
+                  color: const Color(0xFF3B82F6),
+                  onTap: () => setState(() => _selectedState = 'upcoming'),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: context.t('state_active'),
+                  count: counts['active']!,
+                  selected: _selectedState == 'active',
+                  color: AppColors.success,
+                  onTap: () => setState(() => _selectedState = 'active'),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: context.t('state_closed'),
+                  count: counts['closed']!,
+                  selected: _selectedState == 'closed',
+                  color: AppColors.greyText,
+                  onTap: () => setState(() => _selectedState = 'closed'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // ── Offer list ──────────────────────────────────────────────────
+          Expanded(
+            child: filtered.isEmpty
+                ? _EmptyOffers(isDark: isDark)
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, i) {
+                      final o = filtered[i];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => OfferDetailPage(offer: o)),
+                            );
+                            if (context.mounted) {
+                              context.read<AppState>().loadOffersFromBackend();
+                            }
+                          },
+                          child: _OfferCard(offer: o, isDark: isDark),
+                        ),
+                      );
+                    },
+                  ),
+          ),
         ],
       ),
       bottomSheet: Container(
@@ -83,43 +147,13 @@ class _StaffCreateOffersPageState extends State<StaffCreateOffersPage> {
             ),
             onPressed: () => Navigator.pushNamed(context, Routes.createOfferForm),
             icon: const Icon(Icons.add),
-            label: Text(
-              context.t('create_offer'),
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-            ),
+            label: Text(context.t('create_offer'),
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
           ),
         ),
       ),
     );
   }
-}
-
-/// Sorts offers by deadline urgency:
-/// 1. Expiring within 24 h (most urgent first)
-/// 2. Open (furthest deadline last)
-/// 3. Expired (at the bottom)
-List<OfferModel> _sortedByDeadline(List<OfferModel> offers) {
-  final now = DateTime.now();
-  final soon = now.add(const Duration(hours: 24));
-
-  expiringSoon(OfferModel o) =>
-      o.deadline != null && o.deadline!.isAfter(now) && o.deadline!.isBefore(soon);
-  expired(OfferModel o) => o.deadline != null && o.deadline!.isBefore(now);
-  open(OfferModel o) => o.deadline == null || o.deadline!.isAfter(soon);
-
-  final soonList = offers.where(expiringSoon).toList()
-    ..sort((a, b) => a.deadline!.compareTo(b.deadline!));
-  final openList = offers.where(open).toList()
-    ..sort((a, b) {
-      if (a.deadline == null && b.deadline == null) return 0;
-      if (a.deadline == null) return 1;
-      if (b.deadline == null) return -1;
-      return a.deadline!.compareTo(b.deadline!);
-    });
-  final expiredList = offers.where(expired).toList()
-    ..sort((a, b) => b.deadline!.compareTo(a.deadline!));
-
-  return [...soonList, ...openList, ...expiredList];
 }
 
 class _EmptyOffers extends StatelessWidget {
@@ -355,6 +389,68 @@ class _DeadlineBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = selected
+        ? color.withValues(alpha: isDark ? 0.25 : 0.15)
+        : (isDark ? AppColors.darkSurface : AppColors.surface);
+    final borderColor = selected
+        ? color.withValues(alpha: 0.5)
+        : (isDark ? AppColors.darkBorder : AppColors.border);
+    final textColor =
+        selected ? color : (isDark ? AppColors.darkGreyText : AppColors.greyText);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: TextStyle(
+                    fontWeight: FontWeight.w800, color: textColor, fontSize: 13)),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: selected
+                    ? color.withValues(alpha: 0.2)
+                    : textColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text('$count',
+                  style: TextStyle(
+                      color: textColor, fontWeight: FontWeight.w900, fontSize: 11)),
+            ),
+          ],
+        ),
       ),
     );
   }

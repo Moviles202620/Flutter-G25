@@ -7,8 +7,10 @@ import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
 import '../../../models/application_model.dart';
 import '../../../models/historical_rating_summary.dart';
+import '../../../models/offer_model.dart';
 import '../../../services/api_service.dart';
 import '../home/widgets/live_context_card.dart';
+import '../../../services/live_context_service.dart';
 import 'rate_student_page.dart';
 
 class ApplicationDetailPage extends StatelessWidget {
@@ -87,9 +89,11 @@ class ApplicationDetailPage extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               if (offer != null &&
+                  LiveContextService.isSupportedMobilePlatform &&
                   offer.isOnSite &&
+                  offer.offerState == OfferState.active &&
                   application.status == ApplicationStatus.accepted) ...[
-                LiveContextCard(isDark: isDark),
+                LiveContextCard(isDark: isDark, offerState: offer.offerState),
                 const SizedBox(height: 14),
               ],
               _SectionCard(

@@ -58,8 +58,8 @@ class _StaffShellState extends State<StaffShell> {
             label: context.t('home'),
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.add_circle_outline),
-            label: context.t('create'),
+            icon: const Icon(Icons.work_outline),
+            label: context.t('offers'),
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.analytics_outlined),

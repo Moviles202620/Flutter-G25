@@ -100,9 +100,12 @@ class ApiService {
         .toList();
   }
 
-  static Future<List<OfferModel>> getMyOffers(String token) async {
+  static Future<List<OfferModel>> getMyOffers(String token, {String? state}) async {
+    final uri = Uri.parse('$baseUrl/offers/my').replace(
+      queryParameters: state != null ? {'state': state} : null,
+    );
     final res = await http
-        .get(Uri.parse('$baseUrl/offers/my'), headers: _authHeaders(token))
+        .get(uri, headers: _authHeaders(token))
         .timeout(const Duration(seconds: 10));
 
     if (res.statusCode != 200) {
@@ -130,6 +133,27 @@ class ApiService {
     if (res.statusCode != 200) {
       throw ApiException(
           'Error al obtener aplicaciones (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => ApplicationModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// GET /offers/{offerId}/staff-applications
+  /// Returns applicants filtered by offer lifecycle state (server-side):
+  /// upcoming → all; active → accepted only; closed → accepted only.
+  static Future<List<ApplicationModel>> getStaffApplicationsByOffer(
+      String offerId, String token) async {
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/offers/$offerId/staff-applications'),
+          headers: _authHeaders(token),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException('Error al obtener aplicantes (${res.statusCode})');
     }
     final list = jsonDecode(res.body) as List<dynamic>;
     return list
@@ -194,6 +218,35 @@ class ApiService {
     }
   }
 
+  /// POST /applications/{appId}/rate
+  static Future<void> rateApplication({
+    required String appId,
+    required String token,
+    required double rating,
+    required String feedback,
+    required double punctuality,
+    required double quality,
+    required double attitude,
+  }) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/applications/$appId/rate'),
+          headers: _authHeaders(token),
+          body: jsonEncode({
+            'rating': rating,
+            'rating_feedback': feedback,
+            'rating_punctuality': punctuality,
+            'rating_quality': quality,
+            'rating_attitude': attitude,
+          }),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException('Error al calificar (${res.statusCode}): ${res.body}');
+    }
+  }
+
   // ── David's Features ────────────────────────────────────────────────────
 
   // ── Feature 1 (David) ─ Acceptance Rate Dashboard ──────────────────────
@@ -245,6 +298,21 @@ class ApiService {
       throw ApiException(
           'Error al eliminar oferta (${res.statusCode})');
     }
+  }
+
+  /// POST /offers/{offerId}/close  →  returns updated OfferModel with state='closed'
+  static Future<OfferModel> closeOffer(String offerId, String token) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/offers/$offerId/close'),
+          headers: _authHeaders(token),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException('Error al cerrar oferta (${res.statusCode}): ${res.body}');
+    }
+    return OfferModel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   // ── Feature 3 (David) ─ User Profile & Theme Sync ─────────────────────

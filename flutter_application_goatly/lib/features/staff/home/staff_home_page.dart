@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../../app/theme.dart';
-import '../../../app/localization.dart';
-import '../../../models/application_model.dart';
-import 'application_detail_page.dart';
-import 'notifications_page.dart';
-import 'search_applications_page.dart';
 import 'package:provider/provider.dart';
+import '../../../app/localization.dart';
+import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
-
+import '../../../models/offer_model.dart';
+import '../create/offer_detail_page.dart';
+import 'notifications_page.dart';
+import 'search_applications_page.dart';
 
 class StaffHomePage extends StatelessWidget {
   const StaffHomePage({super.key});
@@ -16,28 +15,29 @@ class StaffHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final apps = state.pendingApplications;
-    final activeOffers = state.offers.length;
-    context.watch<SettingsState>(); // Escuchar cambios de idioma y tema
-    
+    context.watch<SettingsState>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final appBarBg = isDark ? AppColors.darkSurface : AppColors.surface;
-    
+    final surface = isDark ? AppColors.darkSurface : AppColors.surface;
+
+    final activeOffer = state.activeOffer;
+    final upcoming = state.upcomingOffers;
+    final unrated = state.offersWithUnratedStudents;
+    final hasAnything =
+        activeOffer != null || upcoming.isNotEmpty || unrated.isNotEmpty;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: appBarBg,
-        surfaceTintColor: appBarBg,
+        backgroundColor: surface,
+        surfaceTintColor: surface,
         elevation: 0,
         leadingWidth: 40,
         leading: Padding(
           padding: const EdgeInsets.only(left: 8),
           child: Image.asset('assets/logo.png', fit: BoxFit.contain),
         ),
-        title: Text(
-          context.t('home'),
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
+        title: Text(context.t('home'),
+            style: const TextStyle(fontWeight: FontWeight.w800)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -45,8 +45,7 @@ class StaffHomePage extends StatelessWidget {
             tooltip: context.t('search_tooltip'),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                  builder: (_) => const SearchApplicationsPage()),
+              MaterialPageRoute(builder: (_) => const SearchApplicationsPage()),
             ),
           ),
           Padding(
@@ -54,30 +53,26 @@ class StaffHomePage extends StatelessWidget {
             child: GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const NotificationsPage()),
+                MaterialPageRoute(builder: (_) => const NotificationsPage()),
               ),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
                   const Icon(Icons.notifications_none_rounded, size: 28),
-                  if (context.watch<AppState>().unreadNotificationCount > 0)
+                  if (state.unreadNotificationCount > 0)
                     Positioned(
                       right: -2,
                       top: -2,
                       child: Container(
                         padding: const EdgeInsets.all(3),
                         decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
+                            color: Colors.red, shape: BoxShape.circle),
                         child: Text(
-                          '${context.read<AppState>().unreadNotificationCount}',
+                          '${state.unreadNotificationCount}',
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                          ),
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900),
                         ),
                       ),
                     ),
@@ -87,216 +82,284 @@ class StaffHomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: apps.isEmpty
-          ? const _EmptyState()
-          : _HomeWithApps(apps: apps, activeOffers: activeOffers),
+      body: hasAnything
+          ? _CockpitBody(
+              activeOffer: activeOffer,
+              upcoming: upcoming,
+              unrated: unrated,
+              isDark: isDark,
+            )
+          : const _EmptyState(),
     );
   }
 }
 
-class _HomeWithApps extends StatelessWidget {
-  final List<ApplicationModel> apps;
-  final int activeOffers;
+class _CockpitBody extends StatelessWidget {
+  final OfferModel? activeOffer;
+  final List<OfferModel> upcoming;
+  final List<OfferModel> unrated;
+  final bool isDark;
 
-  const _HomeWithApps({
-    required this.apps,
-    required this.activeOffers,
+  const _CockpitBody({
+    required this.activeOffer,
+    required this.upcoming,
+    required this.unrated,
+    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
-    context.watch<SettingsState>(); // Escuchar cambios
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
-    final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+    final surface = isDark ? AppColors.darkSurface : AppColors.surface;
+    final border = isDark ? AppColors.darkBorder : AppColors.border;
+    final secondary = isDark ? AppColors.darkGreyText : AppColors.greyText;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        _ActivitySummaryCard(
-          pendingCount: apps.where((a) => a.status == ApplicationStatus.pending).length,
-          activeOffers: activeOffers,
-          surfaceColor: surfaceColor,
-          borderColor: borderColor,
-        ),
-        const SizedBox(height: 18),
+        // ── Active labor hero card ──────────────────────────────────────
+        if (activeOffer != null) ...[
+          _ActiveOfferHero(
+              offer: activeOffer!,
+              isDark: isDark,
+              surface: surface,
+              border: border),
+          const SizedBox(height: 18),
+        ],
 
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              context.t('recent_applications'),
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-            ),
-            Text(
-              context.t('view_all'),
-              style: const TextStyle(color: AppColors.primaryYellow, fontWeight: FontWeight.w700),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
+        // ── Unrated students alert ──────────────────────────────────────
+        if (unrated.isNotEmpty) ...[
+          _UnratedAlert(
+              offers: unrated,
+              isDark: isDark,
+              surface: surface,
+              border: border),
+          const SizedBox(height: 18),
+        ],
 
-        ...apps.map((a) => Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => ApplicationDetailPage(app: a)),
-              );
-            },
-            child: _ApplicationCard(
-              app: a,
-              surfaceColor: surfaceColor,
-              borderColor: borderColor,
-            ),
-          ),
-        )),
+        // ── Upcoming offers ─────────────────────────────────────────────
+        if (upcoming.isNotEmpty) ...[
+          Text(context.t('cockpit_upcoming'),
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
+          ...upcoming.map((o) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _UpcomingOfferCard(
+                    offer: o,
+                    isDark: isDark,
+                    surface: surface,
+                    border: border,
+                    secondary: secondary),
+              )),
+        ],
       ],
     );
   }
 }
 
-class _ActivitySummaryCard extends StatelessWidget {
-  final int pendingCount;
-  final int activeOffers;
-  final Color surfaceColor;
-  final Color borderColor;
+class _ActiveOfferHero extends StatelessWidget {
+  final OfferModel offer;
+  final bool isDark;
+  final Color surface, border;
 
-  const _ActivitySummaryCard({
-    required this.pendingCount,
-    required this.activeOffers,
-    required this.surfaceColor,
-    required this.borderColor,
-  });
+  const _ActiveOfferHero(
+      {required this.offer,
+      required this.isDark,
+      required this.surface,
+      required this.border});
 
   @override
   Widget build(BuildContext context) {
-    context.watch<SettingsState>();
-    
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.t('activity_summary'),
-            style: const TextStyle(letterSpacing: 1.4, color: Color(0xFF9AA4B2), fontWeight: FontWeight.w800),
+    final appState = context.read<AppState>();
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => OfferDetailPage(offer: offer)),
+      ).then((_) => appState.loadOffersFromBackend()),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [const Color(0xFF1B4332), const Color(0xFF144226)]
+                : [const Color(0xFFD1FAE5), const Color(0xFFA7F3D0)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _Metric(
-                  value: pendingCount.toString(),
-                  label: context.t('pending_applications'),
-                ),
-              ),
-              Container(width: 1, height: 50, color: borderColor),
-              Expanded(
-                child: _Metric(
-                  value: activeOffers.toString(),
-                  label: context.t('active_offers'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  final String value;
-  final String label;
-
-  const _Metric({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: AppColors.greyText, fontSize: 16)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ApplicationCard extends StatelessWidget {
-  final ApplicationModel app;
-  final Color surfaceColor;
-  final Color borderColor;
-
-  const _ApplicationCard({
-    required this.app,
-    required this.surfaceColor,
-    required this.borderColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final statusText = switch (app.status) {
-      ApplicationStatus.pending => context.t('chip_pending'),
-      ApplicationStatus.accepted => context.t('chip_accepted'),
-      ApplicationStatus.rejected => context.t('chip_rejected'),
-    };
-
-    final statusColor = switch (app.status) {
-      ApplicationStatus.pending => const Color(0xFF9AA4B2),
-      ApplicationStatus.accepted => AppColors.success,
-      ApplicationStatus.rejected => AppColors.danger,
-    };
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppColors.primaryYellow.withOpacity(0.15),
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primaryYellow.withOpacity(0.35)),
-            ),
-            child: Center(
-              child: Text(
-                app.applicantInitials,
-                style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF9A5B00)),
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(app.applicantName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(app.offerTitle, style: const TextStyle(color: AppColors.greyText, fontSize: 16)),
+                const Icon(Icons.radio_button_checked,
+                    color: AppColors.success, size: 16),
+                const SizedBox(width: 6),
+                Text(context.t('cockpit_active_now'),
+                    style: const TextStyle(
+                        color: AppColors.success,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13)),
+                const Spacer(),
+                const Icon(Icons.chevron_right, color: AppColors.success),
               ],
             ),
+            const SizedBox(height: 10),
+            Text(offer.title,
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: isDark
+                        ? AppColors.darkModeText
+                        : AppColors.darkText)),
+            const SizedBox(height: 4),
+            Text(
+              '${offer.category ?? ''} · ${offer.durationHours}h · '
+              '${offer.isOnSite ? context.t("on_site") : context.t("remote")}',
+              style: const TextStyle(color: AppColors.success, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnratedAlert extends StatelessWidget {
+  final List<OfferModel> offers;
+  final bool isDark;
+  final Color surface, border;
+
+  const _UnratedAlert(
+      {required this.offers,
+      required this.isDark,
+      required this.surface,
+      required this.border});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.primaryYellow
+            .withValues(alpha: isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: AppColors.primaryYellow.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.star_outline_rounded,
+                  color: Color(0xFF9A5B00), size: 20),
+              const SizedBox(width: 8),
+              Text(context.t('cockpit_unrated'),
+                  style: const TextStyle(
+                      color: Color(0xFF9A5B00),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15)),
+            ],
           ),
-          Text(statusText, style: TextStyle(fontWeight: FontWeight.w900, color: statusColor)),
+          const SizedBox(height: 6),
+          Text(context.t('cockpit_unrated_desc'),
+              style: const TextStyle(
+                  color: Color(0xFF9A5B00), fontSize: 13, height: 1.35)),
+          const SizedBox(height: 10),
+          ...offers.map((o) {
+            final appState = context.read<AppState>();
+            return GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => OfferDetailPage(offer: o)),
+              ).then((_) => appState.loadOffersFromBackend()),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.arrow_right,
+                        color: Color(0xFF9A5B00), size: 18),
+                    Text(o.title,
+                        style: const TextStyle(
+                            color: Color(0xFF9A5B00),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13)),
+                  ],
+                ),
+              ),
+            );
+          }),
         ],
+      ),
+    );
+  }
+}
+
+class _UpcomingOfferCard extends StatelessWidget {
+  final OfferModel offer;
+  final bool isDark;
+  final Color surface, border, secondary;
+
+  const _UpcomingOfferCard({
+    required this.offer,
+    required this.isDark,
+    required this.surface,
+    required this.border,
+    required this.secondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    final dt = offer.dateTime;
+    final formatted =
+        '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} '
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => OfferDetailPage(offer: offer)),
+      ).then((_) => appState.loadOffersFromBackend()),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.schedule_outlined,
+                  color: Color(0xFF3B82F6), size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(offer.title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 15)),
+                  Text(formatted,
+                      style: TextStyle(color: secondary, fontSize: 13)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.greyText),
+          ],
+        ),
       ),
     );
   }
@@ -307,65 +370,30 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<SettingsState>();
-    
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final containerBg = isDark ? AppColors.darkSurface : AppColors.surface;
-    final containerBorder = isDark ? AppColors.darkBorder : AppColors.border;
-    final iconColor = isDark ? const Color(0xFF666C78) : const Color(0xFFB6BFCC);
+    final iconColor =
+        isDark ? const Color(0xFF666C78) : const Color(0xFFB6BFCC);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(height: 70),
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: containerBg,
-              shape: BoxShape.circle,
-              border: Border.all(color: containerBorder),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 14,
-                  offset: Offset(0, 8),
-                  color: Color(0x12000000),
-                ),
-              ],
-            ),
-            child: Icon(Icons.inbox_outlined, size: 46, color: iconColor),
-          ),
-          const SizedBox(height: 22),
-          Text(
-            context.t('empty_state_title'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            context.t('empty_state_subtitle'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 18, color: AppColors.greyText, height: 1.35),
-          ),
-          const SizedBox(height: 22),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton.icon(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryYellow,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.add, size: 22),
-              label: Text(
-                context.t('create_offer_action'),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-            ),
-          ),
+          Icon(Icons.inbox_outlined, size: 64, color: iconColor),
+          const SizedBox(height: 18),
+          Text(context.t('cockpit_no_activity'),
+              style:
+                  const TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text(context.t('cockpit_no_activity_sub'),
+              style: TextStyle(
+                  fontSize: 16,
+                  color: isDark
+                      ? AppColors.darkGreyText
+                      : AppColors.greyText,
+                  height: 1.35),
+              textAlign: TextAlign.center),
         ],
       ),
     );

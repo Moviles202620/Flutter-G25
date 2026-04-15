@@ -21,12 +21,32 @@ class _EditProfilePageState extends State<EditProfilePage> {
   String? _selectedDepartment;
   bool _saving = false;
 
+  String _normalizeDepartment(String? department) {
+    if (department == null) return Departments.all.first;
+    // Exact match first
+    if (Departments.all.contains(department)) return department;
+    // Normalize by stripping common accent mojibake and extra whitespace
+    final clean = department
+        .replaceAll(RegExp(r'[\u00AD\u200B]'), '') // strip soft-hyphens / zero-width spaces
+        .trim();
+    if (Departments.all.contains(clean)) return clean;
+    // Keyword-based fallback (handles Ã­ → í style corruption)
+    final lower = clean.toLowerCase();
+    if (lower.contains('ingen')) return 'Ingeniería';
+    if (lower.contains('social')) return 'Ciencias Sociales';
+    if (lower.contains('bsica') || lower.contains('basica') || lower.contains('básica')) return 'Ciencias Básicas';
+    if (lower.contains('admin')) return 'Administrativo';
+    if (lower.contains('arte') || lower.contains('dise') || lower.contains('arqui')) return 'Artes';
+    if (lower.contains('deport')) return 'Deporte';
+    return Departments.all.first;
+  }
+
   @override
   void initState() {
     super.initState();
     final user = context.read<AppState>().user;
     _nameController = TextEditingController(text: user?.name ?? '');
-    _selectedDepartment = user?.department ?? Departments.all.first;
+    _selectedDepartment = _normalizeDepartment(user?.department);
   }
 
   @override
@@ -266,7 +286,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                initialValue: _selectedDepartment,
+                initialValue: Departments.all.contains(_selectedDepartment) ? _selectedDepartment : Departments.all.first,
                 dropdownColor: surface,
                 style: TextStyle(color: textColor, fontSize: 16),
                 decoration: InputDecoration(

@@ -39,6 +39,36 @@ class AppState extends ChangeNotifier {
   int get unreadNotificationCount =>
       _notifications.where((n) => !n.isRead).length;
 
+  // ── Offer state helpers ────────────────────────────────────────────────────
+
+  bool isOfferUpcoming(OfferModel offer) => offer.offerState == OfferState.upcoming;
+  bool isOfferActive(OfferModel offer) => offer.offerState == OfferState.active;
+  bool isOfferClosed(OfferModel offer) => offer.offerState == OfferState.closed;
+
+  /// Active offer (if any) — for Home cockpit hero card.
+  OfferModel? get activeOffer {
+    try {
+      return _offers.firstWhere(isOfferActive);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Upcoming offers sorted by date.
+  List<OfferModel> get upcomingOffers =>
+      _offers.where(isOfferUpcoming).toList()
+        ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+  /// Closed offers that still have unrated accepted applicants.
+  List<OfferModel> get offersWithUnratedStudents {
+    return _offers.where((offer) {
+      if (!isOfferClosed(offer)) return false;
+      return _applications
+          .where((a) => a.offerId == offer.id && a.status == ApplicationStatus.accepted && !a.isCompleted)
+          .isNotEmpty;
+    }).toList();
+  }
+
   Future<bool> login({required String email, required String password}) async {
     final normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail.endsWith('@uniandes.edu.co')) return false;
@@ -141,16 +171,13 @@ class AppState extends ChangeNotifier {
   }
 
   bool canRateApplication(ApplicationModel application, {DateTime? now}) {
-    if (application.status != ApplicationStatus.accepted ||
-        application.isCompleted) {
+    if (application.status != ApplicationStatus.accepted || application.isCompleted) {
       return false;
     }
-
-    final completionTime = getApplicationCompletionTime(application);
-    if (completionTime == null) return false;
-
-    final currentTime = now ?? DateTime.now();
-    return !completionTime.isAfter(currentTime);
+    final offer = getOfferById(application.offerId);
+    if (offer == null) return false;
+    // Can rate when offer is closed (by time or manually)
+    return isOfferClosed(offer);
   }
 
   HistoricalRatingSummary getHistoricalRatingSummary(String applicantName) {
@@ -211,7 +238,7 @@ class AppState extends ChangeNotifier {
     try {
       final myOffers = await ApiService.getMyOffers(token);
       final applicationsByOffer = await Future.wait(
-        myOffers.map((offer) => ApiService.getApplicationsByOffer(offer.id)),
+        myOffers.map((offer) => ApiService.getStaffApplicationsByOffer(offer.id, token)),
       );
 
       _offers
@@ -225,6 +252,22 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     } on ApiException {
       // Keep the previous local state if the backend is unavailable.
+    }
+  }
+
+  Future<bool> closeOffer(String offerId) async {
+    final token = _authToken;
+    if (token == null) return false;
+    try {
+      final updated = await ApiService.closeOffer(offerId, token);
+      final idx = _offers.indexWhere((o) => o.id == offerId);
+      if (idx != -1) {
+        _offers[idx] = updated;
+        notifyListeners();
+      }
+      return true;
+    } on ApiException {
+      return false;
     }
   }
 
@@ -343,13 +386,30 @@ class AppState extends ChangeNotifier {
   }) async {
     final idx = _applications.indexWhere((a) => a.id == appId);
     if (idx == -1) return false;
-
     final app = _applications[idx];
-    if (!canRateApplication(app)) {
-      return false;
+    if (!canRateApplication(app)) return false;
+
+    // Persist to backend first
+    final token = _authToken;
+    if (token != null) {
+      try {
+        await ApiService.rateApplication(
+          appId: appId,
+          token: token,
+          rating: rating,
+          feedback: feedback,
+          punctuality: punctuality,
+          quality: quality,
+          attitude: attitude,
+        );
+      } on ApiException {
+        return false; // Backend sync failed — do not mutate local state
+      }
     }
 
+    // Local update (only reached when backend confirmed the rating)
     app.isCompleted = true;
+    app.completedAt = DateTime.now();
     app.rating = rating;
     app.ratingFeedback = feedback;
     app.ratingPunctuality = punctuality;
@@ -357,20 +417,16 @@ class AppState extends ChangeNotifier {
     app.ratingAttitude = attitude;
     app.ratedAt = DateTime.now();
 
-    _addNotification(
-      AppNotification(
-        id: 'n${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Calificacion enviada',
-        body:
-            'Calificaste a ${app.applicantName} con ${rating.toStringAsFixed(1)} estrellas en "${app.offerTitle}".',
-        type: NotificationType.ratingSubmitted,
-        createdAt: DateTime.now(),
-        relatedId: appId,
-      ),
-    );
+    _addNotification(AppNotification(
+      id: 'n${DateTime.now().millisecondsSinceEpoch}',
+      title: 'Calificacion enviada',
+      body: 'Calificaste a ${app.applicantName} con ${rating.toStringAsFixed(1)} estrellas en "${app.offerTitle}".',
+      type: NotificationType.ratingSubmitted,
+      createdAt: DateTime.now(),
+      relatedId: appId,
+    ));
 
     NotificationService.onRatingSubmitted(app.applicantName, rating);
-
     notifyListeners();
     return true;
   }

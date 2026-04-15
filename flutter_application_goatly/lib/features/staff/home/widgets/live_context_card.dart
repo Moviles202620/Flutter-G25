@@ -6,12 +6,14 @@ import 'package:provider/provider.dart';
 import '../../../../app/localization.dart';
 import '../../../../app/theme.dart';
 import '../../../../data/settings_state.dart';
+import '../../../../models/offer_model.dart';
 import '../../../../services/live_context_service.dart';
 
 class LiveContextCard extends StatefulWidget {
   final bool isDark;
+  final OfferState offerState;
 
-  const LiveContextCard({super.key, required this.isDark});
+  const LiveContextCard({super.key, required this.isDark, required this.offerState});
 
   @override
   State<LiveContextCard> createState() => _LiveContextCardState();
@@ -165,7 +167,8 @@ class _LiveContextCardState extends State<LiveContextCard> {
     final border = widget.isDark ? AppColors.darkBorder : AppColors.border;
     final mutedText = widget.isDark ? AppColors.darkGreyText : AppColors.greyText;
 
-    if (!LiveContextService.isSupportedMobilePlatform) {
+    if (!LiveContextService.isSupportedMobilePlatform ||
+        widget.offerState != OfferState.active) {
       return const SizedBox.shrink();
     }
 
