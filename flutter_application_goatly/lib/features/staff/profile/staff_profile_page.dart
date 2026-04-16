@@ -10,6 +10,13 @@ import 'edit_profile_page.dart';
 class StaffProfilePage extends StatelessWidget {
   const StaffProfilePage({super.key});
 
+  String _initialsFor(String? name) {
+    final trimmed = (name ?? '').trim();
+    if (trimmed.isEmpty) return 'FU';
+    final parts = trimmed.split(RegExp(r'\s+')).where((part) => part.isNotEmpty);
+    return parts.take(2).map((part) => part[0]).join().toUpperCase();
+  }
+
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -47,6 +54,7 @@ class StaffProfilePage extends StatelessWidget {
     final state = context.watch<AppState>();
     context.watch<SettingsState>();
     final user = state.user;
+    final profileImageBytes = state.profileImageBytes;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
@@ -64,19 +72,28 @@ class StaffProfilePage extends StatelessWidget {
               child: Container(
                 width: 60,
                 height: 60,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppColors.primaryYellow,
                   shape: BoxShape.circle,
+                  image: profileImageBytes != null
+                      ? DecorationImage(
+                          image: MemoryImage(profileImageBytes),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
-                child: const Center(
-                  child: Text(
-                    'FU',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white),
-                  ),
-                ),
+                child: profileImageBytes == null
+                    ? Center(
+                        child: Text(
+                          _initialsFor(user?.name),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    : null,
               ),
             ),
             const SizedBox(height: 12),

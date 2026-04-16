@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/application_model.dart';
@@ -13,6 +15,7 @@ class AppState extends ChangeNotifier {
   UserModel? _user;
   String? _authToken;
   String? _refreshToken;
+  Uint8List? _profileImageBytes;
 
   final List<OfferModel> _offers = [];
   final List<ApplicationModel> _applications = [];
@@ -21,6 +24,7 @@ class AppState extends ChangeNotifier {
   UserModel? get user => _user;
   String? get authToken => _authToken;
   String? get refreshToken => _refreshToken;
+  Uint8List? get profileImageBytes => _profileImageBytes;
   bool get isLoggedIn => _user != null;
 
   List<OfferModel> get offers => List.unmodifiable(_offers);
@@ -112,6 +116,7 @@ class AppState extends ChangeNotifier {
     );
     _authToken = session.accessToken;
     _refreshToken = session.refreshToken;
+    _profileImageBytes = null;
     _offers.clear();
     _applications.clear();
     _notifications.clear();
@@ -123,6 +128,7 @@ class AppState extends ChangeNotifier {
     _user = null;
     _authToken = null;
     _refreshToken = null;
+    _profileImageBytes = null;
     _offers.clear();
     _applications.clear();
     _notifications.clear();
@@ -137,6 +143,11 @@ class AppState extends ChangeNotifier {
       department: department,
       university: 'Universidad de los Andes',
     );
+    notifyListeners();
+  }
+
+  void setProfileImageBytes(Uint8List? bytes) {
+    _profileImageBytes = bytes;
     notifyListeners();
   }
 

@@ -61,51 +61,76 @@ class _StaffCreateOffersPageState extends State<StaffCreateOffersPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── State filter chips ──────────────────────────────────────────
-          SizedBox(
-            height: 52,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              children: [
-                _FilterChip(
-                  label: context.t('filter_all'),
-                  count: counts['all']!,
-                  selected: _selectedState == 'all',
-                  color: AppColors.greyText,
-                  onTap: () => setState(() => _selectedState = 'all'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: context.t('state_upcoming'),
-                  count: counts['upcoming']!,
-                  selected: _selectedState == 'upcoming',
-                  color: const Color(0xFF3B82F6),
-                  onTap: () => setState(() => _selectedState = 'upcoming'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: context.t('state_active'),
-                  count: counts['active']!,
-                  selected: _selectedState == 'active',
-                  color: AppColors.success,
-                  onTap: () => setState(() => _selectedState = 'active'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: context.t('state_closed'),
-                  count: counts['closed']!,
-                  selected: _selectedState == 'closed',
-                  color: AppColors.greyText,
-                  onTap: () => setState(() => _selectedState = 'closed'),
-                ),
-              ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 430;
+                final chips = [
+                  _FilterChip(
+                    label: context.t('filter_all'),
+                    count: counts['all']!,
+                    selected: _selectedState == 'all',
+                    color: AppColors.greyText,
+                    onTap: () => setState(() => _selectedState = 'all'),
+                  ),
+                  _FilterChip(
+                    label: context.t('state_upcoming'),
+                    count: counts['upcoming']!,
+                    selected: _selectedState == 'upcoming',
+                    color: const Color(0xFF3B82F6),
+                    onTap: () => setState(() => _selectedState = 'upcoming'),
+                  ),
+                  _FilterChip(
+                    label: context.t('state_active'),
+                    count: counts['active']!,
+                    selected: _selectedState == 'active',
+                    color: AppColors.success,
+                    onTap: () => setState(() => _selectedState = 'active'),
+                  ),
+                  _FilterChip(
+                    label: context.t('state_closed'),
+                    count: counts['closed']!,
+                    selected: _selectedState == 'closed',
+                    color: AppColors.greyText,
+                    onTap: () => setState(() => _selectedState = 'closed'),
+                  ),
+                ];
+
+                if (!isCompact) {
+                  return SizedBox(
+                    height: 52,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: chips.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      itemBuilder: (_, index) => chips[index],
+                    ),
+                  );
+                }
+
+                final chipWidth = (constraints.maxWidth - 8) / 2;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: chips
+                      .map((chip) => SizedBox(width: chipWidth, child: chip))
+                      .toList(),
+                );
+              },
             ),
           ),
           const SizedBox(height: 8),
           // ── Offer list ──────────────────────────────────────────────────
           Expanded(
             child: filtered.isEmpty
-                ? _EmptyOffers(isDark: isDark)
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 92),
+                    child: _EmptyOffers(
+                      isDark: isDark,
+                      selectedState: _selectedState,
+                    ),
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                     itemCount: filtered.length,
@@ -158,34 +183,47 @@ class _StaffCreateOffersPageState extends State<StaffCreateOffersPage> {
 
 class _EmptyOffers extends StatelessWidget {
   final bool isDark;
+  final String selectedState;
 
-  const _EmptyOffers({required this.isDark});
+  const _EmptyOffers({required this.isDark, required this.selectedState});
 
   @override
   Widget build(BuildContext context) {
     final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
+    final secondaryText = isDark ? AppColors.darkGreyText : AppColors.greyText;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.t('no_offers_yet'),
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            context.t('publish_first_offer'),
-            style: const TextStyle(color: AppColors.greyText, height: 1.3),
-          ),
-        ],
+    final (titleKey, subtitleKey) = switch (selectedState) {
+      'upcoming' => ('no_upcoming_offers_title', 'no_upcoming_offers_sub'),
+      'active'   => ('no_active_offers_title',   'no_active_offers_sub'),
+      'closed'   => ('no_closed_offers_title',   'no_closed_offers_sub'),
+      _          => ('no_offers_yet',             'publish_first_offer'),
+    };
+
+    return SizedBox.expand(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.t(titleKey),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              context.t(subtitleKey),
+              style: TextStyle(color: secondaryText, height: 1.4, fontSize: 15),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -262,16 +300,6 @@ class _OfferCard extends StatelessWidget {
     }
   }
 
-  _DeadlineStatus _deadlineStatus() {
-    final now = DateTime.now();
-    if (offer.deadline == null) return _DeadlineStatus.none;
-    if (offer.deadline!.isBefore(now)) return _DeadlineStatus.expired;
-    if (offer.deadline!.isBefore(now.add(const Duration(hours: 24)))) {
-      return _DeadlineStatus.soon;
-    }
-    return _DeadlineStatus.open;
-  }
-
   @override
   Widget build(BuildContext context) {
     final surfaceColor = isDark ? AppColors.darkSurface : AppColors.surface;
@@ -281,7 +309,6 @@ class _OfferCard extends StatelessWidget {
         ? context.t('on_site')
         : context.t('remote');
     final when = _fmtDateTime(offer.dateTime);
-    final status = _deadlineStatus();
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -300,7 +327,7 @@ class _OfferCard extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 18, fontWeight: FontWeight.w900)),
               ),
-              _DeadlineBadge(status: status, context: context),
+              _LifecycleBadge(offer: offer),
               IconButton(
                 icon: const Icon(Icons.edit_outlined, size: 20),
                 color: AppColors.primaryYellow,
@@ -338,35 +365,34 @@ class _OfferCard extends StatelessWidget {
   }
 }
 
-enum _DeadlineStatus { open, soon, expired, none }
-
-class _DeadlineBadge extends StatelessWidget {
-  final _DeadlineStatus status;
-  final BuildContext context;
-
-  const _DeadlineBadge({required this.status, required this.context});
+class _LifecycleBadge extends StatelessWidget {
+  final OfferModel offer;
+  const _LifecycleBadge({required this.offer});
 
   @override
-  Widget build(BuildContext outerContext) {
-    if (status == _DeadlineStatus.none) return const SizedBox.shrink();
-
-    final (label, color, icon) = switch (status) {
-      _DeadlineStatus.open => (
-          outerContext.t('deadline_open'),
-          AppColors.success,
-          Icons.circle,
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final (label, color, icon) = switch (offer.offerState) {
+      OfferState.upcoming => (
+          context.t('state_badge_upcoming'),
+          const Color(0xFF3B82F6),
+          Icons.schedule_outlined,
         ),
-      _DeadlineStatus.soon => (
-          outerContext.t('deadline_soon'),
+      OfferState.active when offer.endTime.difference(now).inHours < 24 => (
+          context.t('state_badge_closing_soon'),
           const Color(0xFFF5A623),
           Icons.warning_amber_rounded,
         ),
-      _DeadlineStatus.expired => (
-          outerContext.t('deadline_expired'),
-          AppColors.danger,
-          Icons.block,
+      OfferState.active => (
+          context.t('state_badge_active'),
+          AppColors.success,
+          Icons.circle,
         ),
-      _DeadlineStatus.none => ('', Colors.transparent, Icons.circle),
+      OfferState.closed => (
+          context.t('state_badge_closed'),
+          AppColors.greyText,
+          Icons.lock_outline,
+        ),
     };
 
     return Container(
@@ -424,6 +450,7 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: bg,
@@ -431,7 +458,7 @@ class _FilterChip extends StatelessWidget {
           border: Border.all(color: borderColor),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(label,
                 style: TextStyle(

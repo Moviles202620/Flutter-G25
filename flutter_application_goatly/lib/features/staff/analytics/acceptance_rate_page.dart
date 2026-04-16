@@ -186,22 +186,25 @@ class _AcceptanceRateCard extends StatelessWidget {
           const SizedBox(height: 14),
 
           // Breakdown chips
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _StatusChip(
-                label: context.t('accepted_label'),
+                symbol: '✅',
+                semanticLabel: context.t('accepted_label'),
                 count: rate.accepted,
                 color: AppColors.success,
               ),
-              const SizedBox(width: 8),
               _StatusChip(
-                label: context.t('rejected_label'),
+                symbol: '❌',
+                semanticLabel: context.t('rejected_label'),
                 count: rate.rejected,
                 color: AppColors.danger,
               ),
-              const SizedBox(width: 8),
               _StatusChip(
-                label: context.t('pending_label'),
+                symbol: '⏳',
+                semanticLabel: context.t('pending_label'),
                 count: rate.pending,
                 color: const Color(0xFF9AA4B2),
               ),
@@ -221,42 +224,43 @@ class _AcceptanceRateCard extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  final String label;
+  final String symbol;
+  final String semanticLabel;
   final int count;
   final Color color;
 
   const _StatusChip({
-    required this.label,
+    required this.symbol,
+    required this.semanticLabel,
     required this.count,
     required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '$count $label',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: color,
+    return Semantics(
+      label: '$semanticLabel: $count',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(symbol, style: const TextStyle(fontSize: 12)),
+            const SizedBox(width: 6),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
