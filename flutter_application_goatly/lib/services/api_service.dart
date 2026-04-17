@@ -16,7 +16,8 @@ import '../models/application_search_model.dart';
 /// Android emulator: baseUrl = 'http://10.0.2.2:8000'
 /// Physical device : baseUrl = 'http://YOUR_PC_LAN_IP:8000'
 class ApiService {
-  static const String baseUrl = 'http://localhost:8000';
+  // Android emulator → 10.0.2.2 | Physical device → your LAN IP | Web → localhost
+  static const String baseUrl = 'http://10.0.2.2:8000';
 
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',
