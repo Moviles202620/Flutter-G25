@@ -224,6 +224,12 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'deadline_soon': 'Cierra pronto',
         'deadline_expired': 'Expirada',
         'no_deadline': 'Sin fecha límite',
+        // ── BQ9 (David Hernandez) ─ GPA High Rate ──
+        'gpa_high_rate': 'GPA Alto por Oferta',
+        'gpa_high_rate_title': 'GPA ≥ 4.0 por Oferta',
+        'high_gpa_pct': '% con GPA ≥ 4.0',
+        'high_gpa_count': 'Con GPA ≥ 4.0',
+        'no_high_gpa_data': 'No hay datos de GPA alto disponibles',
         // ── Form fields & hints ──
         'offer_details': 'Detalles de la oferta',
         'offer_subtitle': 'Completa los campos para publicar tu nueva solicitud.',
@@ -574,6 +580,12 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'deadline_soon': 'Closing soon',
         'deadline_expired': 'Expired',
         'no_deadline': 'No deadline',
+        // ── BQ9 (David Hernandez) ─ GPA High Rate ──
+        'gpa_high_rate': 'GPA High Rate by Offer',
+        'gpa_high_rate_title': 'GPA ≥ 4.0 per Offer',
+        'high_gpa_pct': '% with GPA ≥ 4.0',
+        'high_gpa_count': 'With GPA ≥ 4.0',
+        'no_high_gpa_data': 'No high-GPA data available',
         // ── Form fields & hints ──
         'offer_details': 'Offer Details',
         'offer_subtitle': 'Fill in the fields to publish your new request.',

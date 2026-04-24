@@ -31,8 +31,16 @@ class _StaffShellState extends State<StaffShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppState>().loadStaffWorkspace();
+      final state = context.read<AppState>();
+      state.startConnectivityMonitoring();
+      state.loadStaffWorkspace();
     });
+  }
+
+  @override
+  void dispose() {
+    context.read<AppState>().stopConnectivityMonitoring();
+    super.dispose();
   }
 
 
