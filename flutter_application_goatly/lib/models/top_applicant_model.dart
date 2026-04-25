@@ -33,6 +33,16 @@ class TopApplicantModel {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'applicant_name': applicantName,
+        'career': career,
+        'semester': semester,
+        'gpa': gpa,
+        'total_applications': totalApplications,
+        'offers_applied': offersApplied,
+        'status_summary': statusSummary,
+      };
+
   String get initials {
     final parts = applicantName.trim().split(' ');
     if (parts.length >= 2) {

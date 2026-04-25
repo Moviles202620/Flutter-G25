@@ -4,11 +4,14 @@ import 'package:provider/provider.dart';
 import '../../../app/localization.dart';
 import '../../../app/theme.dart';
 import '../../../data/settings_state.dart';
+import '../../../services/api_service.dart';
+import '../../../services/connectivity_service.dart';
 import 'acceptance_rate_page.dart';
+import 'applications_per_semester_page.dart';
 import 'gpa_dashboard_page.dart';
+import 'gpa_high_rate_page.dart';
 import 'insights_page.dart';
 import 'top_applicants_page.dart';
-import 'gpa_high_rate_page.dart';
 
 class AnalyticsShell extends StatefulWidget {
   const AnalyticsShell({super.key});
@@ -24,8 +27,24 @@ class _AnalyticsShellState extends State<AnalyticsShell>
   @override
   void initState() {
     super.initState();
-    _controller = TabController(length: 5, vsync: this);
+    _controller = TabController(length: 6, vsync: this);
     _controller.addListener(_handleTabChange);
+    // Multi-threading: Future.wait lanza ambas peticiones HTTP simultáneamente
+    // sin bloquear el UI thread, reduciendo el tiempo total de carga.
+    _prefetchGuillermosData();
+  }
+
+  Future<void> _prefetchGuillermosData() async {
+    if (!ConnectivityService.isOnline) return;
+    try {
+      await Future.wait([
+        ApiService.getGpaByOffer(),
+        ApiService.getTopApplicants(),
+        ApiService.getApplicationsPerSemester(),
+      ]);
+    } catch (_) {
+      // Errors handled individually by each page's own cache-first logic.
+    }
   }
 
   @override
@@ -68,6 +87,10 @@ class _AnalyticsShellState extends State<AnalyticsShell>
       _AnalyticsTabMeta(
         label: context.t('gpa_high_rate'),
         icon: Icons.workspace_premium_outlined,
+      ),
+      _AnalyticsTabMeta(
+        label: context.t('apps_per_semester'),
+        icon: Icons.bar_chart_rounded,
       ),
     ];
 
@@ -141,6 +164,7 @@ class _AnalyticsShellState extends State<AnalyticsShell>
                 GpaDashboardPage(),
                 TopApplicantsPage(),
                 GpaHighRatePage(),
+                ApplicationsPerSemesterPage(),
               ],
             ),
           ),

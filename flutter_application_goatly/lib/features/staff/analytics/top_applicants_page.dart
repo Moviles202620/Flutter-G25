@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../app/localization.dart';
 import '../../../app/theme.dart';
+import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
 import '../../../models/top_applicant_model.dart';
 import '../../../services/api_service.dart';
+import '../../../services/cache_service.dart';
 
 class TopApplicantsPage extends StatefulWidget {
   const TopApplicantsPage({super.key});
@@ -14,93 +16,197 @@ class TopApplicantsPage extends StatefulWidget {
 }
 
 class _TopApplicantsPageState extends State<TopApplicantsPage> {
-  late Future<List<TopApplicantModel>> _future;
+  List<TopApplicantModel>? _items;
+  String? _lastUpdated;
+  bool _loading = false;
+  String? _error;
+
+  static const _endpoint = 'top_applicants';
 
   @override
   void initState() {
     super.initState();
-    _future = ApiService.getTopApplicants();
+    _loadWithCache();
   }
 
-  void _reload() {
-    setState(() {
-      _future = ApiService.getTopApplicants();
-    });
+  // ── Cache-first load ───────────────────────────────────────────────────────
+
+  Future<void> _loadWithCache() async {
+    final cached = await CacheService.loadAnalytics(_endpoint);
+    final ts = await CacheService.getAnalyticsTimestamp(_endpoint);
+    if (cached != null) {
+      final list = (cached['data'] as List)
+          .map((e) => TopApplicantModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (mounted) setState(() { _items = list; _lastUpdated = ts; });
+    } else {
+      if (mounted) setState(() => _loading = true);
+    }
+    await _refreshFromNetwork();
   }
+
+  Future<void> _refreshFromNetwork() async {
+    if (mounted) setState(() { _loading = true; _error = null; });
+    try {
+      // Multi-threading: ApiService.getTopApplicants() corre en el
+      // event loop de Dart sin bloquear el UI thread (async I/O concurrente).
+      final fresh = await ApiService.getTopApplicants();
+      final payload = {'data': fresh.map((e) => e.toJson()).toList()};
+      await CacheService.saveAnalytics(_endpoint, payload);
+      final ts = await CacheService.getAnalyticsTimestamp(_endpoint);
+      if (mounted) setState(() { _items = fresh; _lastUpdated = ts; _loading = false; });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          if (_items == null) _error = 'Sin conexión y sin datos en caché.';
+        });
+      }
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  String _fmtTimestamp(String? iso) {
+    if (iso == null) return '';
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return '';
+    final local = dt.toLocal();
+    final dd = local.day.toString().padLeft(2, '0');
+    final mm = local.month.toString().padLeft(2, '0');
+    final hh = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '$dd/$mm $hh:$min';
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     context.watch<SettingsState>();
+    context.watch<AppState>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return FutureBuilder<List<TopApplicantModel>>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(color: AppColors.primaryYellow),
-                const SizedBox(height: 12),
-                Text(context.t('loading')),
-              ],
-            ),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.error_outline,
-                    size: 48,
-                    color: isDark ? AppColors.darkGreyText : AppColors.greyText),
-                const SizedBox(height: 12),
-                Text(context.t('error_loading')),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: _reload,
-                  icon: const Icon(Icons.refresh),
-                  label: Text(context.t('retry')),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryYellow,
-                    foregroundColor: Colors.black,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final data = snapshot.data!;
-        if (data.isEmpty) {
-          return Center(
-            child: Text(
-              context.t('no_top_data'),
-              style: TextStyle(
-                color: isDark ? AppColors.darkGreyText : AppColors.greyText,
-                fontSize: 16,
+    if (_error != null && _items == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off_rounded,
+                size: 48,
+                color: isDark ? AppColors.darkGreyText : AppColors.greyText),
+            const SizedBox(height: 12),
+            Text(context.t('no_cache_offline')),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: _loadWithCache,
+              icon: const Icon(Icons.refresh),
+              label: Text(context.t('retry')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryYellow,
+                foregroundColor: Colors.black,
               ),
             ),
-          );
-        }
+          ],
+        ),
+      );
+    }
 
-        return RefreshIndicator(
-          onRefresh: () async => _reload(),
-          color: AppColors.primaryYellow,
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            itemCount: data.length,
-            itemBuilder: (context, index) =>
-                _LeaderboardCard(rank: index + 1, applicant: data[index], isDark: isDark),
+    if (_items == null && _loading) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(color: AppColors.primaryYellow),
+            const SizedBox(height: 12),
+            Text(context.t('loading')),
+          ],
+        ),
+      );
+    }
+
+    final items = _items ?? [];
+
+    if (items.isEmpty && !_loading) {
+      return Center(
+        child: Text(
+          context.t('no_top_data'),
+          style: TextStyle(
+            color: isDark ? AppColors.darkGreyText : AppColors.greyText,
+            fontSize: 16,
           ),
-        );
-      },
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refreshFromNetwork,
+      color: AppColors.primaryYellow,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        itemCount: items.length + 1, // +1 for last-updated header
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return _LastUpdatedRow(
+              lastUpdated: _fmtTimestamp(_lastUpdated),
+              loading: _loading,
+              context: context,
+            );
+          }
+          return _LeaderboardCard(
+              rank: index, applicant: items[index - 1], isDark: isDark);
+        },
+      ),
     );
   }
 }
+
+// ── Last updated row ──────────────────────────────────────────────────────────
+
+class _LastUpdatedRow extends StatelessWidget {
+  final String lastUpdated;
+  final bool loading;
+  final BuildContext context;
+
+  const _LastUpdatedRow({
+    required this.lastUpdated,
+    required this.loading,
+    required this.context,
+  });
+
+  @override
+  Widget build(BuildContext ctx) {
+    if (lastUpdated.isEmpty && !loading) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          if (lastUpdated.isNotEmpty) ...[
+            const Icon(Icons.update_rounded,
+                size: 13, color: AppColors.greyText),
+            const SizedBox(width: 5),
+            Text(
+              '${context.t('last_updated')}: $lastUpdated',
+              style:
+                  const TextStyle(color: AppColors.greyText, fontSize: 12),
+            ),
+          ],
+          if (loading) ...[
+            const SizedBox(width: 8),
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                  strokeWidth: 1.5, color: AppColors.primaryYellow),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Leaderboard card ──────────────────────────────────────────────────────────
 
 class _LeaderboardCard extends StatelessWidget {
   final int rank;
@@ -114,9 +220,9 @@ class _LeaderboardCard extends StatelessWidget {
   });
 
   Color get _rankColor {
-    if (rank == 1) return const Color(0xFFFFD700); // gold
-    if (rank == 2) return const Color(0xFFC0C0C0); // silver
-    if (rank == 3) return const Color(0xFFCD7F32); // bronze
+    if (rank == 1) return const Color(0xFFFFD700);
+    if (rank == 2) return const Color(0xFFC0C0C0);
+    if (rank == 3) return const Color(0xFFCD7F32);
     return AppColors.greyText;
   }
 
@@ -170,7 +276,8 @@ class _LeaderboardCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.primaryYellow.withValues(alpha: 0.15),
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primaryYellow.withValues(alpha: 0.35)),
+              border: Border.all(
+                  color: AppColors.primaryYellow.withValues(alpha: 0.35)),
             ),
             child: Center(
               child: Text(
@@ -191,26 +298,33 @@ class _LeaderboardCard extends StatelessWidget {
               children: [
                 Text(
                   applicant.applicantName,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '${applicant.career} • Sem. ${applicant.semester}',
                   style: TextStyle(
-                      color: isDark ? AppColors.darkGreyText : AppColors.greyText,
+                      color: isDark
+                          ? AppColors.darkGreyText
+                          : AppColors.greyText,
                       fontSize: 13),
                 ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
                     if (accepted > 0)
-                      _MiniChip(label: '$accepted ✓', color: AppColors.success),
+                      _MiniChip(
+                          label: '$accepted ✓', color: AppColors.success),
                     if (accepted > 0) const SizedBox(width: 6),
                     if (rejected > 0)
-                      _MiniChip(label: '$rejected ✗', color: AppColors.danger),
+                      _MiniChip(
+                          label: '$rejected ✗', color: AppColors.danger),
                     if (rejected > 0) const SizedBox(width: 6),
                     if (pending > 0)
-                      _MiniChip(label: '$pending ⏳', color: AppColors.greyText),
+                      _MiniChip(
+                          label: '$pending ⏳',
+                          color: AppColors.greyText),
                   ],
                 ),
               ],
@@ -219,7 +333,8 @@ class _LeaderboardCard extends StatelessWidget {
 
           // GPA badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: AppColors.primaryYellow.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
@@ -239,7 +354,9 @@ class _LeaderboardCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkGreyText : AppColors.greyText,
+                    color: isDark
+                        ? AppColors.darkGreyText
+                        : AppColors.greyText,
                   ),
                 ),
               ],

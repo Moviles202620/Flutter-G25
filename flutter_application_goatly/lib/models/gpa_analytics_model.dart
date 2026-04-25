@@ -28,4 +28,14 @@ class GpaAnalyticsModel {
       maxGpa: (json['max_gpa'] as num).toDouble(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'offer_id': offerId,
+        'offer_title': offerTitle,
+        'category': category,
+        'total_applicants': totalApplicants,
+        'average_gpa': averageGpa,
+        'min_gpa': minGpa,
+        'max_gpa': maxGpa,
+      };
 }
