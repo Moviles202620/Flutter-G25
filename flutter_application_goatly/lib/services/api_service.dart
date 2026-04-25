@@ -9,6 +9,7 @@ import '../models/user_profile_model.dart';
 import '../models/gpa_analytics_model.dart';
 import '../models/top_applicant_model.dart';
 import '../models/application_search_model.dart';
+import '../models/applications_per_semester_model.dart';
 
 /// Central HTTP client for the Goatly FastAPI backend.
 ///
@@ -17,7 +18,7 @@ import '../models/application_search_model.dart';
 /// Physical device : baseUrl = 'http://YOUR_PC_LAN_IP:8000'
 class ApiService {
   // Android emulator → 10.0.2.2 | Physical device → your LAN IP | Web → localhost
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  static const String baseUrl = 'http://localhost:8000';
 
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',
@@ -442,6 +443,22 @@ class ApiService {
     final list = jsonDecode(res.body) as List<dynamic>;
     return list
         .map((e) => TopApplicantModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Feature BQ10 (Guillermo) ─ Applications per Semester ─────────────
+
+  /// GET /analytics/applications-per-semester
+  /// BQ10: Total applications and unique students grouped by academic semester.
+  static Future<List<ApplicationsPerSemesterModel>> getApplicationsPerSemester() async {
+    final uri = Uri.parse('$baseUrl/analytics/applications-per-semester');
+    final res = await http.get(uri, headers: _headers).timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) {
+      throw ApiException('Error al obtener apps por semestre (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => ApplicationsPerSemesterModel.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 

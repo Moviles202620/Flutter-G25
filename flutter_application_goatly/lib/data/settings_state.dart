@@ -224,6 +224,12 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'deadline_soon': 'Cierra pronto',
         'deadline_expired': 'Expirada',
         'no_deadline': 'Sin fecha límite',
+        // ── BQ10 (Guillermo) ─ Applications per Semester ──
+        'apps_per_semester': 'Aplicaciones/Semestre',
+        'apps_per_semester_title': 'Aplicaciones por Semestre',
+        'apps_per_semester_subtitle': 'Promedio de aplicaciones enviadas por estudiante según su semestre académico',
+        'last_updated': 'Actualizado',
+        'no_cache_offline': 'Sin conexión y sin datos en caché.',
         // ── BQ9 (David Hernandez) ─ GPA High Rate ──
         'gpa_high_rate': 'GPA Alto por Oferta',
         'gpa_high_rate_title': 'GPA ≥ 4.0 por Oferta',
@@ -580,6 +586,12 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'deadline_soon': 'Closing soon',
         'deadline_expired': 'Expired',
         'no_deadline': 'No deadline',
+        // ── BQ10 (Guillermo) ─ Applications per Semester ──
+        'apps_per_semester': 'Apps/Semester',
+        'apps_per_semester_title': 'Applications per Semester',
+        'apps_per_semester_subtitle': 'Average applications submitted per student by academic semester',
+        'last_updated': 'Updated',
+        'no_cache_offline': 'No connection and no cached data.',
         // ── BQ9 (David Hernandez) ─ GPA High Rate ──
         'gpa_high_rate': 'GPA High Rate by Offer',
         'gpa_high_rate_title': 'GPA ≥ 4.0 per Offer',
