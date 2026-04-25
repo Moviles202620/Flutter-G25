@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../app/localization.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
+import '../../../data/settings_state.dart';
 import '../../../models/offer_model.dart';
 import '../../../models/application_model.dart';
 import '../../../services/api_service.dart';
@@ -18,7 +20,7 @@ class ApplicantListPage extends StatefulWidget {
 class _ApplicantListPageState extends State<ApplicantListPage> {
   // ── Filter state ──────────────────────────────────────────────────────────
   double _minGpa = 0.0;
-  int? _semester;          // null = any
+  int? _semester; // null = any
   String _availability = ''; // '' = any
   String _sortBy = 'gpa';
   bool _filtersOpen = false;
@@ -26,7 +28,7 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
   // ── Data state ────────────────────────────────────────────────────────────
   List<ApplicationModel> _results = [];
   bool _loading = true;
-  String? _errorBanner; // non-null when using local fallback
+  bool _isOffline = false;
 
   @override
   void initState() {
@@ -39,7 +41,7 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
   Future<void> _loadApplicants() async {
     setState(() {
       _loading = true;
-      _errorBanner = null;
+      _isOffline = false;
     });
 
     try {
@@ -52,7 +54,6 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
       );
       if (mounted) setState(() { _results = list; _loading = false; });
     } catch (_) {
-      // Backend unavailable → filter locally
       if (!mounted) return;
       final local = context.read<AppState>().filterApplicationsLocal(
         offerId: widget.offer.id,
@@ -64,7 +65,7 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
       setState(() {
         _results = local;
         _loading = false;
-        _errorBanner = 'Sin conexión al servidor — mostrando datos locales';
+        _isOffline = true;
       });
     }
   }
@@ -73,6 +74,7 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<SettingsState>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? AppColors.darkSurface : AppColors.surface;
     final border = isDark ? AppColors.darkBorder : AppColors.border;
@@ -90,26 +92,26 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Postulantes',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            Text(
+              context.t('applicants_title'),
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
             Text(
               widget.offer.title,
-              style: const TextStyle(
-                  fontSize: 13, color: AppColors.greyText),
+              style: const TextStyle(fontSize: 13, color: AppColors.greyText),
               overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'Filtros',
+            tooltip: context.t('filters_tooltip'),
             icon: Badge(
               isLabelVisible: _hasActiveFilters,
               backgroundColor: AppColors.primaryYellow,
               child: const Icon(Icons.filter_list_rounded),
             ),
-            onPressed: () =>
-                setState(() => _filtersOpen = !_filtersOpen),
+            onPressed: () => setState(() => _filtersOpen = !_filtersOpen),
           ),
           const SizedBox(width: 4),
         ],
@@ -117,11 +119,10 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
       body: Column(
         children: [
           // ── Offline banner ──────────────────────────────────────────────
-          if (_errorBanner != null)
+          if (_isOffline)
             Container(
               width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: const Color(0xFFFEF3C7),
               child: Row(
                 children: [
@@ -130,7 +131,7 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _errorBanner!,
+                      context.t('offline_banner'),
                       style: const TextStyle(
                           color: Color(0xFF92400E), fontSize: 13),
                     ),
@@ -151,6 +152,7 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
                     sortBy: _sortBy,
                     surface: surface,
                     border: border,
+                    isDark: isDark,
                     onChanged: ({
                       required double minGpa,
                       required int? semester,
@@ -205,6 +207,7 @@ class _FilterPanel extends StatefulWidget {
   final String sortBy;
   final Color surface;
   final Color border;
+  final bool isDark;
   final void Function({
     required double minGpa,
     required int? semester,
@@ -219,6 +222,7 @@ class _FilterPanel extends StatefulWidget {
     required this.sortBy,
     required this.surface,
     required this.border,
+    required this.isDark,
     required this.onChanged,
   });
 
@@ -262,11 +266,15 @@ class _FilterPanelState extends State<_FilterPanel> {
           // GPA minimum
           Row(
             children: [
-              const Text('GPA mínimo',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                context.t('min_gpa_filter'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
               const Spacer(),
               Text(
-                _gpa == 0 ? 'Cualquiera' : _gpa.toStringAsFixed(1),
+                _gpa == 0
+                    ? context.t('any_option')
+                    : _gpa.toStringAsFixed(1),
                 style: const TextStyle(
                     color: AppColors.primaryYellow,
                     fontWeight: FontWeight.w900),
@@ -288,8 +296,10 @@ class _FilterPanelState extends State<_FilterPanel> {
           // Semester
           Row(
             children: [
-              const Text('Semestre',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                context.t('filter_semester'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: SingleChildScrollView(
@@ -297,15 +307,14 @@ class _FilterPanelState extends State<_FilterPanel> {
                   child: Row(
                     children: [
                       _SemChip(
-                        label: 'Todos',
+                        label: context.t('all_option'),
                         selected: _semester == null,
                         onTap: () {
                           setState(() => _semester = null);
                           _emit();
                         },
                       ),
-                      ...List.generate(10, (i) => i + 1).map((s) =>
-                          _SemChip(
+                      ...List.generate(10, (i) => i + 1).map((s) => _SemChip(
                             label: '$s',
                             selected: _semester == s,
                             onTap: () {
@@ -323,14 +332,16 @@ class _FilterPanelState extends State<_FilterPanel> {
           const SizedBox(height: 10),
 
           // Availability
-          const Text('Disponibilidad',
-              style: TextStyle(fontWeight: FontWeight.w700)),
+          Text(
+            context.t('availability_label'),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             children: [
               _AvailChip(
-                label: 'Cualquiera',
+                label: context.t('any_option'),
                 value: '',
                 selected: _availability.isEmpty,
                 onTap: () {
@@ -339,7 +350,7 @@ class _FilterPanelState extends State<_FilterPanel> {
                 },
               ),
               _AvailChip(
-                label: 'Tiempo completo',
+                label: context.t('availability_full'),
                 value: 'full_time',
                 selected: _availability == 'full_time',
                 onTap: () {
@@ -349,7 +360,7 @@ class _FilterPanelState extends State<_FilterPanel> {
                 },
               ),
               _AvailChip(
-                label: 'Medio tiempo',
+                label: context.t('availability_part'),
                 value: 'part_time',
                 selected: _availability == 'part_time',
                 onTap: () {
@@ -359,7 +370,7 @@ class _FilterPanelState extends State<_FilterPanel> {
                 },
               ),
               _AvailChip(
-                label: 'Flexible',
+                label: context.t('availability_flexible'),
                 value: 'flexible',
                 selected: _availability == 'flexible',
                 onTap: () {
@@ -375,13 +386,16 @@ class _FilterPanelState extends State<_FilterPanel> {
           // Sort
           Row(
             children: [
-              const Text('Ordenar por',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                context.t('sort_by_label'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
               const SizedBox(width: 12),
               _SortChip(
-                label: 'Mayor GPA',
+                label: context.t('highest_gpa_sort'),
                 value: 'gpa',
                 current: _sortBy,
+                isDark: widget.isDark,
                 onTap: (v) {
                   setState(() => _sortBy = v);
                   _emit();
@@ -389,9 +403,10 @@ class _FilterPanelState extends State<_FilterPanel> {
               ),
               const SizedBox(width: 8),
               _SortChip(
-                label: 'Semestre',
+                label: context.t('filter_semester'),
                 value: 'semester',
                 current: _sortBy,
+                isDark: widget.isDark,
                 onTap: (v) {
                   setState(() => _sortBy = v);
                   _emit();
@@ -399,9 +414,10 @@ class _FilterPanelState extends State<_FilterPanel> {
               ),
               const SizedBox(width: 8),
               _SortChip(
-                label: 'Más reciente',
+                label: context.t('most_recent_sort'),
                 value: 'date',
                 current: _sortBy,
+                isDark: widget.isDark,
                 onTap: (v) {
                   setState(() => _sortBy = v);
                   _emit();
@@ -422,9 +438,7 @@ class _SemChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   const _SemChip(
-      {required this.label,
-      required this.selected,
-      required this.onTap});
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -432,8 +446,7 @@ class _SemChip extends StatelessWidget {
         child: GestureDetector(
           onTap: onTap,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: selected
                   ? AppColors.primaryYellow
@@ -469,8 +482,7 @@ class _AvailChip extends StatelessWidget {
         onTap: onTap,
         child: Container(
           margin: const EdgeInsets.only(bottom: 4),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.primaryYellow
@@ -493,24 +505,29 @@ class _SortChip extends StatelessWidget {
   final String label;
   final String value;
   final String current;
+  final bool isDark;
   final void Function(String) onTap;
   const _SortChip(
       {required this.label,
       required this.value,
       required this.current,
+      required this.isDark,
       required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final selected = current == value;
+    // Dark-mode-aware selected background
+    final selectedBg =
+        isDark ? AppColors.primaryYellow.withValues(alpha: 0.25) : AppColors.darkText;
+    final selectedFg = isDark ? AppColors.primaryYellow : AppColors.primaryYellow;
+
     return GestureDetector(
       onTap: () => onTap(value),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: selected
-              ? AppColors.darkText
-              : AppColors.border.withValues(alpha: 0.4),
+          color: selected ? selectedBg : AppColors.border.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -518,7 +535,7 @@ class _SortChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
-            color: selected ? AppColors.primaryYellow : AppColors.greyText,
+            color: selected ? selectedFg : AppColors.greyText,
           ),
         ),
       ),
@@ -581,10 +598,10 @@ class _ApplicantCard extends StatelessWidget {
     required this.onTap,
   });
 
-  String get _availLabel => switch (app.availability) {
-        'full_time' => 'Tiempo completo',
-        'part_time' => 'Medio tiempo',
-        _ => 'Flexible',
+  String _availLabel(BuildContext context) => switch (app.availability) {
+        'full_time' => context.t('availability_full'),
+        'part_time' => context.t('availability_part'),
+        _ => context.t('availability_flexible'),
       };
 
   Color get _availColor => switch (app.availability) {
@@ -593,10 +610,10 @@ class _ApplicantCard extends StatelessWidget {
         _ => AppColors.greyText,
       };
 
-  String get _statusLabel => switch (app.status) {
-        ApplicationStatus.accepted => 'ACEPTADA',
-        ApplicationStatus.rejected => 'RECHAZADA',
-        _ => 'PENDIENTE',
+  String _statusLabel(BuildContext context) => switch (app.status) {
+        ApplicationStatus.accepted => context.t('chip_accepted'),
+        ApplicationStatus.rejected => context.t('chip_rejected'),
+        _ => context.t('chip_pending'),
       };
 
   Color get _statusColor => switch (app.status) {
@@ -640,8 +657,7 @@ class _ApplicantCard extends StatelessWidget {
                     color: AppColors.primaryYellow.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                     border: Border.all(
-                        color: AppColors.primaryYellow
-                            .withValues(alpha: 0.35)),
+                        color: AppColors.primaryYellow.withValues(alpha: 0.35)),
                   ),
                   child: Center(
                     child: Text(
@@ -684,7 +700,7 @@ class _ApplicantCard extends StatelessWidget {
                               color: _availColor.withValues(alpha: 0.4)),
                         ),
                         child: Text(
-                          _availLabel,
+                          _availLabel(context),
                           style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -693,7 +709,7 @@ class _ApplicantCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _statusLabel,
+                        _statusLabel(context),
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w900,
@@ -727,8 +743,7 @@ class _ApplicantCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 const Text('GPA',
-                    style: TextStyle(
-                        fontSize: 11, color: AppColors.greyText)),
+                    style: TextStyle(fontSize: 11, color: AppColors.greyText)),
                 const SizedBox(height: 4),
                 const Icon(Icons.chevron_right,
                     color: AppColors.greyText, size: 20),
@@ -762,26 +777,23 @@ class _EmptyResults extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              hasFilters
-                  ? Icons.search_off_rounded
-                  : Icons.inbox_outlined,
+              hasFilters ? Icons.search_off_rounded : Icons.inbox_outlined,
               size: 64,
               color: AppColors.greyText.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
               hasFilters
-                  ? 'Sin resultados con estos filtros'
-                  : 'Aún no hay postulantes',
+                  ? context.t('no_results_filters')
+                  : context.t('no_applicants_yet'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.w900),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
             Text(
               hasFilters
-                  ? 'Intenta ajustando el GPA mínimo, semestre o disponibilidad.'
-                  : 'Los postulantes aparecerán aquí cuando apliquen a esta oferta.',
+                  ? context.t('adjust_filters_hint')
+                  : context.t('applicants_will_appear'),
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: AppColors.greyText, fontSize: 15, height: 1.4),

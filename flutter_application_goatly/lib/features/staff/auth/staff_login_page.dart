@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
+
+import '../../../app/localization.dart';
 import '../../../app/routes.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
+import '../../../services/api_service.dart';
 import '../../../services/biometric_service.dart';
 
 class StaffLoginPage extends StatefulWidget {
@@ -19,29 +22,13 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
   final _passwordCtrl = TextEditingController();
 
   bool _obscurePassword = true;
-  bool _biometricReady = false; // available AND enabled by user
+  bool _biometricReady = false;
   bool _loading = false;
 
   @override
   void initState() {
     super.initState();
     _initBiometric();
-  }
-
-  /// Checks if the device has enrolled biometrics AND the user has opted in.
-  Future<void> _initBiometric() async {
-    final available = await BiometricService.isAvailable();
-    final enabled = await BiometricService.isEnabled();
-    if (available && enabled) {
-      final savedEmail = await BiometricService.getSavedEmail();
-      if (savedEmail != null) {
-        if (mounted) {
-          setState(() => _biometricReady = true);
-          // Auto-trigger the prompt on launch for a seamless experience
-          _handleBiometricLogin();
-        }
-      }
-    }
   }
 
   @override
@@ -51,127 +38,161 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
     super.dispose();
   }
 
-  // ── Password login ────────────────────────────────────────────────────────
+  Future<void> _initBiometric() async {
+    final available = await BiometricService.isAvailable();
+    final enabled = await BiometricService.isEnabled();
+    if (!available || !enabled) return;
+
+    final savedEmail = await BiometricService.getSavedEmail();
+    if (savedEmail == null || !mounted) return;
+
+    setState(() => _biometricReady = true);
+    _handleBiometricLogin();
+  }
 
   Future<void> _handlePasswordLogin() async {
+    final navigator = Navigator.of(context);
+    final settings = context.read<SettingsState>();
     final email = _emailCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
+    final invalidCredentialsMsg = context.t('err_invalid_credentials');
 
     if (email.isEmpty || password.isEmpty) {
-      _showError('Completa todos los campos');
+      _showError(context.t('err_fill_fields'));
       return;
     }
 
     setState(() => _loading = true);
 
-    final ok = context.read<AppState>().login(email: email, password: password);
+    final appState = context.read<AppState>();
+    final ok = await appState.login(email: email, password: password);
 
-    setState(() => _loading = false);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
 
     if (!ok) {
-      _showError('Credenciales inválidas (debe ser @uniandes.edu.co, mín. 4 caracteres)');
+      _showError(invalidCredentialsMsg);
       return;
     }
 
-    // Save email for future biometric sessions
+    _syncPreferencesFromBackend(appState, settings);
     await BiometricService.saveEmail(email);
+    final refreshToken = appState.refreshToken;
+    if (refreshToken != null) {
+      await BiometricService.saveRefreshToken(refreshToken);
+    }
 
-    // Offer biometric enrollment if not already enabled
     final available = await BiometricService.isAvailable();
     final alreadyEnabled = await BiometricService.isEnabled();
     if (available && !alreadyEnabled && mounted) {
-      await _offerBiometricEnrollment(email);
+      await _offerBiometricEnrollment();
     }
 
     if (mounted) {
-      Navigator.pushReplacementNamed(context, Routes.shell);
+      navigator.pushReplacementNamed(Routes.shell);
     }
   }
 
-  // ── Biometric login ───────────────────────────────────────────────────────
-
   Future<void> _handleBiometricLogin() async {
-    // Read context-dependent values before any async gap
-    final s = context.read<SettingsState>();
+    final settings = context.read<SettingsState>();
     final appState = context.read<AppState>();
+    final navigator = Navigator.of(context);
+    final noSessionMsg = context.t('err_no_biometric_session');
+    final restoreFailMsg = context.t('err_restore_session');
 
     final savedEmail = await BiometricService.getSavedEmail();
     if (savedEmail == null) {
-      _showError('No hay sesión guardada para biometría. Inicia sesión con contraseña primero.');
+      _showError(noSessionMsg);
       return;
     }
 
     final authenticated = await BiometricService.authenticate(
-      localizedReason: s.getString('biometric_reason'),
+      localizedReason: settings.getString('biometric_reason'),
     );
 
-    if (!authenticated) return; // user cancelled or sensor failed — stay on login
+    if (!authenticated || !mounted) return;
 
-    if (mounted) {
-      final ok = appState.loginWithBiometric(savedEmail);
-      if (!ok) {
-        _showError('No se pudo restaurar la sesión. Inicia sesión con contraseña.');
-        return;
-      }
-      Navigator.pushReplacementNamed(context, Routes.shell);
+    final savedRefreshToken = await BiometricService.getSavedRefreshToken();
+    if (savedRefreshToken == null) {
+      _showError(noSessionMsg);
+      return;
     }
+
+    final ok = await appState.loginWithBiometric(
+      refreshToken: savedRefreshToken,
+    );
+    if (!ok) {
+      _showError(restoreFailMsg);
+      return;
+    }
+
+    _syncPreferencesFromBackend(appState, settings);
+    navigator.pushReplacementNamed(Routes.shell);
   }
 
-  // ── Biometric enrollment dialog ───────────────────────────────────────────
-
-  Future<void> _offerBiometricEnrollment(String email) async {
-    // Capture context-dependent values before the async gap
-    final s = context.read<SettingsState>();
-
+  Future<void> _offerBiometricEnrollment() async {
+    final settings = context.read<SettingsState>();
     final biometrics = await BiometricService.getAvailableBiometrics();
     if (!mounted) return;
 
-    // Build a descriptive list of available sensors
-    final sensorNames = biometrics.map((b) {
-      switch (b) {
-        case BiometricType.fingerprint:
-          return s.language == 'es' ? 'huella dactilar' : 'fingerprint';
-        case BiometricType.face:
-          return s.language == 'es' ? 'reconocimiento facial' : 'face recognition';
-        default:
-          return s.language == 'es' ? 'biometría' : 'biometrics';
-      }
-    }).join(s.language == 'es' ? ' y ' : ' and ');
+    final sensorNames = biometrics
+        .map((biometric) {
+          switch (biometric) {
+            case BiometricType.fingerprint:
+              return settings.getString('fingerprint_word');
+            case BiometricType.face:
+              return settings.getString('face_word');
+            default:
+              return settings.getString('biometrics_word');
+          }
+        })
+        .join(settings.getString('and_word'));
 
-    final bodyText = s.language == 'es'
-        ? 'Podrás iniciar sesión con $sensorNames en próximos accesos.'
-        : 'You can sign in with $sensorNames on future visits.';
+    final bodyText =
+        '${settings.getString('biometric_enabled_prefix')} $sensorNames ${settings.getString('biometric_enabled_suffix')}';
 
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.fingerprint, color: AppColors.primaryYellow, size: 28),
+            const Icon(
+              Icons.fingerprint,
+              color: AppColors.primaryYellow,
+              size: 28,
+            ),
             const SizedBox(width: 10),
-            Text(s.getString('biometric_enroll_title'),
-                style: const TextStyle(fontWeight: FontWeight.w800)),
+            Text(
+              settings.getString('biometric_enroll_title'),
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
           ],
         ),
         content: Text(bodyText, style: const TextStyle(height: 1.5)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(s.getString('biometric_enroll_skip'),
-                style: const TextStyle(color: AppColors.greyText)),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              settings.getString('biometric_enroll_skip'),
+              style: const TextStyle(color: AppColors.greyText),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.darkText,
               foregroundColor: AppColors.primaryYellow,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(s.getString('biometric_enroll_confirm'),
-                style: const TextStyle(fontWeight: FontWeight.w700)),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              settings.getString('biometric_enroll_confirm'),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -179,269 +200,315 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
 
     if (confirmed == true) {
       await BiometricService.setEnabled(true);
-      setState(() => _biometricReady = true);
+      if (mounted) {
+        setState(() => _biometricReady = true);
+      }
     }
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  void _syncPreferencesFromBackend(
+    AppState appState,
+    SettingsState settings,
+  ) {
+    final token = appState.authToken;
+    if (token == null) return;
 
-  void _showError(String msg) {
+    ApiService.getUserProfile(token)
+        .then((profile) {
+          if (!mounted) return;
+          if (settings.themePreference != 'system') {
+            settings.setDarkMode(profile.isDarkMode);
+          }
+          if (settings.languagePreference != 'system') {
+            settings.setLanguage(profile.language);
+          }
+        })
+        .catchError((_) {});
+  }
+
+  void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
+        content: Text(message),
         backgroundColor: AppColors.danger,
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppColors.darkSurface : AppColors.surface;
+    final border = isDark ? AppColors.darkBorder : AppColors.border;
+    final primaryText = isDark ? AppColors.darkModeText : AppColors.darkText;
+    final secondaryText = isDark ? AppColors.darkGreyText : AppColors.greyText;
+    final inputFill = isDark ? const Color(0xFF202020) : Colors.white;
+    final logoColor = isDark ? AppColors.primaryYellow : AppColors.darkText;
+    final primaryButtonBg = isDark ? AppColors.primaryYellow : AppColors.darkText;
+    final primaryButtonFg = isDark ? Colors.black : AppColors.primaryYellow;
+
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: Column(
-              children: [
-                const SizedBox(height: 30),
-
-                // ── Logo ──────────────────────────────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Goatly',
-                      style: TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.darkText,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                children: [
+                  const SizedBox(height: 30),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Goatly',
+                        style: TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          color: logoColor,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primaryYellow,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 26),
-
-                // ── Login card ────────────────────────────────────────────
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: const [
-                      BoxShadow(
-                        blurRadius: 18,
-                        offset: Offset(0, 10),
-                        color: Color(0x14000000),
+                      const SizedBox(width: 6),
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primaryYellow,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Iniciar sesión',
-                        style: TextStyle(
-                            fontSize: 30, fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Acceso exclusivo para Staff',
-                        style: TextStyle(
-                            fontSize: 16, color: AppColors.greyText),
-                      ),
-                      const SizedBox(height: 22),
-
-                      // Email
-                      const Text('Correo institucional',
+                  const SizedBox(height: 26),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: border),
+                      boxShadow: [
+                        BoxShadow(
+                          blurRadius: 18,
+                          offset: const Offset(0, 10),
+                          color: isDark
+                              ? const Color(0x22000000)
+                              : const Color(0x14000000),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.t('login_title'),
                           style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        autocorrect: false,
-                        decoration: InputDecoration(
-                          hintText: 'nombre@uniandes.edu.co',
-                          hintStyle:
-                              const TextStyle(color: Color(0xFF9AA4B2)),
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 16),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: AppColors.border),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(
-                                color: AppColors.primaryYellow, width: 1.5),
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            color: primaryText,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Password
-                      const Text('Contraseña',
+                        const SizedBox(height: 6),
+                        Text(
+                          context.t('staff_access'),
+                          style: TextStyle(fontSize: 16, color: secondaryText),
+                        ),
+                        const SizedBox(height: 22),
+                        Text(
+                          context.t('email_label'),
                           style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _passwordCtrl,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          hintText: '••••••••',
-                          hintStyle:
-                              const TextStyle(color: Color(0xFF9AA4B2)),
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 16),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: AppColors.border),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(
-                                color: AppColors.primaryYellow, width: 1.5),
-                          ),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off_rounded
-                                  : Icons.visibility_rounded,
-                              color: AppColors.greyText,
-                            ),
-                            onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: primaryText,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Primary login button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.darkText,
-                            foregroundColor: AppColors.primaryYellow,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(28),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          autocorrect: false,
+                          style: TextStyle(color: primaryText),
+                          decoration: _inputDecoration(
+                            border: border,
+                            fillColor: inputFill,
+                            hintColor: secondaryText,
+                            hintText: 'nombre@uniandes.edu.co',
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          context.t('password_label'),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: primaryText,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _passwordCtrl,
+                          obscureText: _obscurePassword,
+                          style: TextStyle(color: primaryText),
+                          decoration: _inputDecoration(
+                            border: border,
+                            fillColor: inputFill,
+                            hintColor: secondaryText,
+                            hintText: '••••••••',
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off_rounded
+                                    : Icons.visibility_rounded,
+                                color: secondaryText,
+                              ),
+                              onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
                             ),
                           ),
-                          onPressed: _loading ? null : _handlePasswordLogin,
-                          child: _loading
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    color: AppColors.primaryYellow,
-                                  ),
-                                )
-                              : const Text(
-                                  'Ingresar',
-                                  style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800),
-                                ),
                         ),
-                      ),
-
-                      // ── Biometric button (shown when opt-in is active) ──
-                      if (_biometricReady) ...[
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 18),
                         SizedBox(
                           width: double.infinity,
                           height: 56,
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.darkText,
-                              side: const BorderSide(
-                                  color: AppColors.border, width: 1.5),
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryButtonBg,
+                              foregroundColor: primaryButtonFg,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(28),
                               ),
                             ),
-                            icon: const Icon(Icons.fingerprint, size: 26),
-                            label: const Text(
-                              'Usar huella / rostro',
-                              style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.w700),
+                            onPressed: _loading ? null : _handlePasswordLogin,
+                            child: _loading
+                                ? CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: primaryButtonFg,
+                                  )
+                                : Text(
+                                    context.t('login_btn'),
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        if (_biometricReady) ...[
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: primaryText,
+                                side: BorderSide(color: border, width: 1.5),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                              ),
+                              icon: const Icon(Icons.fingerprint, size: 26),
+                              label: Text(
+                                context.t('use_biometrics'),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              onPressed: _handleBiometricLogin,
                             ),
-                            onPressed: _handleBiometricLogin,
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        Divider(color: border),
+                        const SizedBox(height: 12),
+                        Center(
+                          child: Text(
+                            context.t('forgot_password'),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: primaryText.withValues(alpha: 0.85),
+                            ),
                           ),
                         ),
                       ],
-
-                      const SizedBox(height: 18),
-                      const Divider(color: AppColors.border),
-                      const SizedBox(height: 12),
-                      Center(
-                        child: Text(
-                          '¿Olvidaste tu contraseña?',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.darkText.withValues(alpha: 0.85),
-                          ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        context.t('login_help_prefix'),
+                        style: TextStyle(color: secondaryText),
+                      ),
+                      Text(
+                        context.t('contact_support'),
+                        style: const TextStyle(
+                          color: AppColors.primaryYellow,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Text('¿Problemas para ingresar? ',
-                        style: TextStyle(color: AppColors.greyText)),
-                    Text('Contacta soporte',
-                        style: TextStyle(
-                            color: AppColors.primaryYellow,
-                            fontWeight: FontWeight.w700)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Text('Privacidad',
-                        style: TextStyle(color: Color(0xFF9AA4B2))),
-                    SizedBox(width: 22),
-                    Text('Términos',
-                        style: TextStyle(color: Color(0xFF9AA4B2))),
-                    SizedBox(width: 22),
-                    Text('Ayuda',
-                        style: TextStyle(color: Color(0xFF9AA4B2))),
-                  ],
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        context.t('privacy'),
+                        style: TextStyle(color: secondaryText),
+                      ),
+                      const SizedBox(width: 22),
+                      Text(
+                        context.t('terms'),
+                        style: TextStyle(color: secondaryText),
+                      ),
+                      const SizedBox(width: 22),
+                      Text(
+                        context.t('help'),
+                        style: TextStyle(color: secondaryText),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required Color border,
+    required Color fillColor,
+    required Color hintColor,
+    required String hintText,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: TextStyle(color: hintColor),
+      filled: true,
+      fillColor: fillColor,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(
+          color: AppColors.primaryYellow,
+          width: 1.5,
+        ),
+      ),
+      suffixIcon: suffixIcon,
     );
   }
 }

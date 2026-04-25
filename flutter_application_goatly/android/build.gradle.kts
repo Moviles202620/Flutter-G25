@@ -7,7 +7,7 @@ allprojects {
 
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
-        .dir("../../build")
+        .dir("C:/dev/flutter-build/goatly")
         .get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 

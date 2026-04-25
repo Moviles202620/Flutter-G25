@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../../app/localization.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
 import '../../../models/application_model.dart';
 
 class RateStudentPage extends StatefulWidget {
   final ApplicationModel app;
+
   const RateStudentPage({super.key, required this.app});
 
   @override
@@ -27,21 +30,27 @@ class _RateStudentPageState extends State<RateStudentPage> {
   }
 
   Future<void> _submit() async {
+    final appState = context.read<AppState>();
+    final currentApplication =
+        appState.getApplicationById(widget.app.id) ?? widget.app;
+
+    if (!appState.canRateApplication(currentApplication)) {
+      _showError(context.t('cannot_rate_yet'));
+      return;
+    }
     if (_overall == 0) {
-      _showError('Selecciona una calificación general (1–5 estrellas)');
+      _showError(context.t('err_select_rating'));
       return;
     }
     if (_feedbackCtrl.text.trim().isEmpty) {
-      _showError('Escribe un comentario sobre el desempeño');
+      _showError(context.t('err_write_comment'));
       return;
     }
 
     setState(() => _submitting = true);
 
-    final appState = context.read<AppState>();
-
-    await appState.completeAndRate(
-      appId: widget.app.id,
+    final saved = await appState.completeAndRate(
+      appId: currentApplication.id,
       rating: _overall,
       feedback: _feedbackCtrl.text.trim(),
       punctuality: _punctuality == 0 ? _overall : _punctuality,
@@ -49,28 +58,32 @@ class _RateStudentPageState extends State<RateStudentPage> {
       attitude: _attitude == 0 ? _overall : _attitude,
     );
 
+    if (!mounted) return;
     setState(() => _submitting = false);
 
-    if (!mounted) return;
+    if (!saved) {
+      _showError(context.t('cannot_save_rating'));
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-            'Calificación de ${widget.app.applicantName} enviada ✓'),
+          '${context.t('submit_rating')}: ${currentApplication.applicantName}',
+        ),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
       ),
     );
 
-    // Pop twice: back to detail page, then back to list
     Navigator.pop(context);
     Navigator.pop(context);
   }
 
-  void _showError(String msg) {
+  void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
+        content: Text(message),
         backgroundColor: AppColors.danger,
         behavior: SnackBarBehavior.floating,
       ),
@@ -79,9 +92,16 @@ class _RateStudentPageState extends State<RateStudentPage> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final application =
+        appState.getApplicationById(widget.app.id) ?? widget.app;
+    final canRateNow = appState.canRateApplication(application);
+    final completionTime = appState.getApplicationCompletionTime(application);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? AppColors.darkSurface : AppColors.surface;
     final border = isDark ? AppColors.darkBorder : AppColors.border;
+    final secondary = isDark ? AppColors.darkGreyText : AppColors.greyText;
+    final textColor = isDark ? AppColors.darkModeText : AppColors.darkText;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -89,12 +109,10 @@ class _RateStudentPageState extends State<RateStudentPage> {
         backgroundColor: surface,
         surfaceTintColor: surface,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+        title: Text(
+          context.t('rate_student'),
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
-        title: const Text('Calificar estudiante',
-            style: TextStyle(fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: Stack(
@@ -102,8 +120,7 @@ class _RateStudentPageState extends State<RateStudentPage> {
           ListView(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 120),
             children: [
-              // ── Student header ──────────────────────────────────────
-              _SectionCard(
+              _Card(
                 surface: surface,
                 border: border,
                 child: Row(
@@ -117,7 +134,7 @@ class _RateStudentPageState extends State<RateStudentPage> {
                       ),
                       child: Center(
                         child: Text(
-                          widget.app.applicantInitials,
+                          application.applicantInitials,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
@@ -131,22 +148,23 @@ class _RateStudentPageState extends State<RateStudentPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(widget.app.applicantName,
-                              style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900)),
-                          const SizedBox(height: 3),
                           Text(
-                            widget.app.career.isNotEmpty
-                                ? '${widget.app.career} • Sem ${widget.app.semester}'
-                                : 'Estudiante Uniandes',
+                            application.applicantName,
                             style: const TextStyle(
-                                color: AppColors.greyText,
-                                fontSize: 14),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            widget.app.offerTitle,
+                            application.career.isNotEmpty
+                                ? '${application.career} · ${context.t('semester')} ${application.semester}'
+                                : context.t('student_label'),
+                            style: TextStyle(color: secondary, fontSize: 14),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            application.offerTitle,
                             style: const TextStyle(
                               color: AppColors.primaryYellow,
                               fontWeight: FontWeight.w700,
@@ -159,134 +177,138 @@ class _RateStudentPageState extends State<RateStudentPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // ── Overall rating ──────────────────────────────────────
-              _SectionCard(
-                surface: surface,
-                border: border,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('CALIFICACIÓN GENERAL',
-                        style: TextStyle(
-                            letterSpacing: 1.1,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13)),
-                    const SizedBox(height: 6),
-                    const Text(
-                      '¿Cómo evalúas el desempeño general del estudiante?',
-                      style: TextStyle(
-                          color: AppColors.greyText, fontSize: 14),
-                    ),
-                    const SizedBox(height: 16),
-                    _BigStarRating(
-                      value: _overall,
-                      onChanged: (v) => setState(() => _overall = v),
-                    ),
-                    if (_overall > 0) ...[
-                      const SizedBox(height: 10),
-                      Center(
+              if (!canRateNow) ...[
+                const SizedBox(height: 16),
+                _Card(
+                  surface: surface,
+                  border: border,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.schedule_outlined,
+                        color: AppColors.primaryYellow,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
                         child: Text(
-                          _overallLabel(_overall),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: _starColor(_overall),
-                          ),
+                          completionTime == null
+                              ? context.t('cannot_verify_time')
+                              : '${context.t('rating_enabled_when')} ${completionTime.day.toString().padLeft(2, '0')}/${completionTime.month.toString().padLeft(2, '0')}/${completionTime.year} ${completionTime.hour}:${completionTime.minute.toString().padLeft(2, '0')}',
+                          style: TextStyle(color: secondary, height: 1.35),
                         ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 16),
-
-              // ── Category ratings ────────────────────────────────────
-              _SectionCard(
+              _Card(
                 surface: surface,
                 border: border,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('CATEGORÍAS',
-                        style: TextStyle(
-                            letterSpacing: 1.1,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13)),
-                    const SizedBox(height: 14),
-                    _CategoryRow(
-                      label: 'Puntualidad',
-                      icon: Icons.access_time_rounded,
-                      value: _punctuality,
-                      onChanged: (v) =>
-                          setState(() => _punctuality = v),
-                    ),
-                    const SizedBox(height: 14),
-                    _CategoryRow(
-                      label: 'Calidad del trabajo',
-                      icon: Icons.workspace_premium_outlined,
-                      value: _quality,
-                      onChanged: (v) => setState(() => _quality = v),
-                    ),
-                    const SizedBox(height: 14),
-                    _CategoryRow(
-                      label: 'Actitud y disposición',
-                      icon: Icons.sentiment_satisfied_outlined,
-                      value: _attitude,
-                      onChanged: (v) =>
-                          setState(() => _attitude = v),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // ── Feedback text ───────────────────────────────────────
-              _SectionCard(
-                surface: surface,
-                border: border,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('COMENTARIOS',
-                        style: TextStyle(
-                            letterSpacing: 1.1,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13)),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _feedbackCtrl,
-                      maxLines: 5,
-                      maxLength: 500,
-                      decoration: InputDecoration(
-                        hintText:
-                            'Describe el desempeño del estudiante: puntualidad, calidad de trabajo, actitud...',
-                        hintStyle:
-                            const TextStyle(color: Color(0xFF9AA4B2)),
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.all(14),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide:
-                              const BorderSide(color: AppColors.border),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                              color: AppColors.primaryYellow,
-                              width: 1.5),
-                        ),
+                    Text(
+                      context.t('overall_rating_section'),
+                      style: const TextStyle(
+                        letterSpacing: 1.1,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      context.t('rate_question'),
+                      style: TextStyle(color: secondary, fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                    _StarSelector(
+                      value: _overall,
+                      onChanged: (value) => setState(() => _overall = value),
+                      isDark: isDark,
+                    ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _Card(
+                surface: surface,
+                border: border,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t('categories_section'),
+                      style: const TextStyle(
+                        letterSpacing: 1.1,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _MetricRatingRow(
+                      label: context.t('punctuality'),
+                      icon: Icons.access_time_rounded,
+                      value: _punctuality,
+                      secondary: secondary,
+                      isDark: isDark,
+                      onChanged: (value) =>
+                          setState(() => _punctuality = value),
+                    ),
+                    const SizedBox(height: 14),
+                    _MetricRatingRow(
+                      label: context.t('work_quality'),
+                      icon: Icons.workspace_premium_outlined,
+                      value: _quality,
+                      secondary: secondary,
+                      isDark: isDark,
+                      onChanged: (value) => setState(() => _quality = value),
+                    ),
+                    const SizedBox(height: 14),
+                    _MetricRatingRow(
+                      label: context.t('attitude'),
+                      icon: Icons.sentiment_satisfied_outlined,
+                      value: _attitude,
+                      secondary: secondary,
+                      isDark: isDark,
+                      onChanged: (value) => setState(() => _attitude = value),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _Card(
+                surface: surface,
+                border: border,
+                child: TextFormField(
+                  controller: _feedbackCtrl,
+                  maxLines: 5,
+                  maxLength: 500,
+                  style: TextStyle(color: textColor),
+                  decoration: InputDecoration(
+                    labelText: context.t('comments'),
+                    hintText: context.t('hint_comments'),
+                    hintStyle: TextStyle(color: secondary),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF202020) : Colors.white,
+                    contentPadding: const EdgeInsets.all(14),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: AppColors.primaryYellow,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
-
-          // ── Submit button ───────────────────────────────────────────
           Positioned(
             left: 16,
             right: 16,
@@ -299,27 +321,25 @@ class _RateStudentPageState extends State<RateStudentPage> {
                   foregroundColor: Colors.black,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                onPressed: _submitting ? null : _submit,
+                onPressed: _submitting || !canRateNow ? null : _submit,
                 child: _submitting
                     ? const SizedBox(
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.black54),
+                          strokeWidth: 2.5,
+                          color: Colors.black54,
+                        ),
                       )
-                    : const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.star_rounded, size: 22),
-                          SizedBox(width: 8),
-                          Text('Enviar calificación',
-                              style: TextStyle(
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w900)),
-                        ],
+                    : Text(
+                        context.t('submit_rating'),
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
               ),
             ),
@@ -328,46 +348,65 @@ class _RateStudentPageState extends State<RateStudentPage> {
       ),
     );
   }
-
-  String _overallLabel(double v) {
-    if (v >= 5) return '¡Excelente!';
-    if (v >= 4) return 'Muy bueno';
-    if (v >= 3) return 'Bueno';
-    if (v >= 2) return 'Regular';
-    return 'Deficiente';
-  }
-
-  Color _starColor(double v) {
-    if (v >= 4) return AppColors.success;
-    if (v >= 3) return const Color(0xFFF59E0B);
-    return AppColors.danger;
-  }
 }
 
-// ── Big interactive star row ──────────────────────────────────────────────────
+class _Card extends StatelessWidget {
+  final Widget child;
+  final Color surface;
+  final Color border;
 
-class _BigStarRating extends StatelessWidget {
-  final double value;
-  final void Function(double) onChanged;
-
-  const _BigStarRating({required this.value, required this.onChanged});
+  const _Card({
+    required this.child,
+    required this.surface,
+    required this.border,
+  });
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _StarSelector extends StatelessWidget {
+  final double value;
+  final ValueChanged<double> onChanged;
+  final double iconSize;
+  final bool isDark;
+
+  const _StarSelector({
+    required this.value,
+    required this.onChanged,
+    required this.isDark,
+    this.iconSize = 42,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final emptyColor = isDark ? AppColors.darkBorder : AppColors.border;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(5, (i) {
-        final starVal = (i + 1).toDouble();
+      children: List.generate(5, (index) {
+        final starValue = (index + 1).toDouble();
         return GestureDetector(
-          onTap: () => onChanged(starVal),
+          onTap: () => onChanged(starValue),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Icon(
-              value >= starVal ? Icons.star_rounded : Icons.star_outline_rounded,
-              size: 48,
-              color: value >= starVal
+              value >= starValue
+                  ? Icons.star_rounded
+                  : Icons.star_outline_rounded,
+              size: iconSize,
+              color: value >= starValue
                   ? const Color(0xFFF59E0B)
-                  : AppColors.border,
+                  : emptyColor,
             ),
           ),
         );
@@ -376,18 +415,20 @@ class _BigStarRating extends StatelessWidget {
   }
 }
 
-// ── Small category star row ───────────────────────────────────────────────────
-
-class _CategoryRow extends StatelessWidget {
+class _MetricRatingRow extends StatelessWidget {
   final String label;
   final IconData icon;
   final double value;
-  final void Function(double) onChanged;
+  final Color secondary;
+  final bool isDark;
+  final ValueChanged<double> onChanged;
 
-  const _CategoryRow({
+  const _MetricRatingRow({
     required this.label,
     required this.icon,
     required this.value,
+    required this.secondary,
+    required this.isDark,
     required this.onChanged,
   });
 
@@ -395,56 +436,21 @@ class _CategoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: AppColors.greyText),
+        Icon(icon, size: 20, color: secondary),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(label,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 15)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
         ),
-        Row(
-          children: List.generate(5, (i) {
-            final starVal = (i + 1).toDouble();
-            return GestureDetector(
-              onTap: () => onChanged(starVal),
-              child: Icon(
-                value >= starVal
-                    ? Icons.star_rounded
-                    : Icons.star_outline_rounded,
-                size: 26,
-                color: value >= starVal
-                    ? const Color(0xFFF59E0B)
-                    : AppColors.border,
-              ),
-            );
-          }),
+        _StarSelector(
+          value: value,
+          onChanged: onChanged,
+          isDark: isDark,
+          iconSize: 24,
         ),
       ],
     );
   }
-}
-
-// ── Section card ──────────────────────────────────────────────────────────────
-
-class _SectionCard extends StatelessWidget {
-  final Widget child;
-  final Color surface;
-  final Color border;
-
-  const _SectionCard({
-    required this.child,
-    required this.surface,
-    required this.border,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: border),
-        ),
-        child: child,
-      );
 }

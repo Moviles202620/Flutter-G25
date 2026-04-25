@@ -6,8 +6,9 @@ import '../../../data/settings_state.dart';
 import '../home/staff_home_page.dart';
 import '../create/staff_create_offers_page.dart';
 import '../profile/staff_profile_page.dart';
-import '../analytics/analytics_page.dart';
+import '../analytics/analytics_shell.dart';
 import '../../../app/theme.dart';
+
 
 class StaffShell extends StatefulWidget {
   const StaffShell({super.key});
@@ -22,14 +23,30 @@ class _StaffShellState extends State<StaffShell> {
   final _pages = const [
     StaffHomePage(),
     StaffCreateOffersPage(),
-    AnalyticsPage(),
+    AnalyticsShell(),
     StaffProfilePage(),
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = context.read<AppState>();
+      state.startConnectivityMonitoring();
+      state.loadStaffWorkspace();
+    });
+  }
+
+  @override
+  void dispose() {
+    context.read<AppState>().stopConnectivityMonitoring();
+    super.dispose();
+  }
+
+
+  @override
   Widget build(BuildContext context) {
-    context.watch<SettingsState>();
-    final pendingOps = context.watch<AppState>().pendingOpsCount;
+    context.watch<SettingsState>(); // Escuchar cambios de idioma
 
     return Scaffold(
       body: _pages[_index],
@@ -49,30 +66,12 @@ class _StaffShellState extends State<StaffShell> {
             label: context.t('home'),
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.add_circle_outline),
-            label: context.t('create'),
+            icon: const Icon(Icons.work_outline),
+            label: context.t('offers'),
           ),
           BottomNavigationBarItem(
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.bar_chart_rounded),
-                if (pendingOps > 0)
-                  Positioned(
-                    right: -4,
-                    top: -4,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Colors.orange,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            label: 'Analítica',
+            icon: const Icon(Icons.analytics_outlined),
+            label: context.t('analytics'),
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.person),

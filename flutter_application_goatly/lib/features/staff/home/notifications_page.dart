@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../app/localization.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
+import '../../../data/settings_state.dart';
 import '../../../models/notification_model.dart';
 
 class NotificationsPage extends StatelessWidget {
@@ -10,6 +12,7 @@ class NotificationsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    context.watch<SettingsState>();
     final notifications = appState.notifications;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? AppColors.darkSurface : AppColors.surface;
@@ -25,17 +28,19 @@ class NotificationsPage extends StatelessWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Notificaciones',
-            style: TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(
+          context.t('notifications_title'),
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
         centerTitle: true,
         actions: [
           if (notifications.any((n) => !n.isRead))
             TextButton(
               onPressed: () =>
                   context.read<AppState>().markAllNotificationsRead(),
-              child: const Text(
-                'Marcar todo',
-                style: TextStyle(
+              child: Text(
+                context.t('mark_all_read'),
+                style: const TextStyle(
                     color: AppColors.primaryYellow,
                     fontWeight: FontWeight.w700),
               ),
@@ -54,6 +59,7 @@ class NotificationsPage extends StatelessWidget {
                   notification: n,
                   surface: surface,
                   border: border,
+                  isDark: isDark,
                   onTap: () =>
                       context.read<AppState>().markNotificationRead(n.id),
                 );
@@ -69,12 +75,14 @@ class _NotificationCard extends StatelessWidget {
   final AppNotification notification;
   final Color surface;
   final Color border;
+  final bool isDark;
   final VoidCallback onTap;
 
   const _NotificationCard({
     required this.notification,
     required this.surface,
     required this.border,
+    required this.isDark,
     required this.onTap,
   });
 
@@ -96,26 +104,33 @@ class _NotificationCard extends StatelessWidget {
         NotificationType.ratingSubmitted => const Color(0xFFF59E0B),
       };
 
-  String _timeAgo(DateTime dt) {
+  String _timeAgo(DateTime dt, BuildContext context) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Ahora mismo';
-    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
-    if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
-    return 'Hace ${diff.inDays} días';
+    if (diff.inMinutes < 1) return context.t('time_just_now');
+    final prefix = context.t('time_ago_prefix');
+    final prefixPart = prefix.isEmpty ? '' : '$prefix ';
+    if (diff.inMinutes < 60) {
+      return '$prefixPart${diff.inMinutes} ${context.t('time_min_unit')}';
+    }
+    if (diff.inHours < 24) {
+      return '$prefixPart${diff.inHours} ${context.t('time_hour_unit')}';
+    }
+    return '$prefixPart${diff.inDays} ${context.t('time_day_unit')}';
   }
 
   @override
   Widget build(BuildContext context) {
+    context.watch<SettingsState>();
     final unread = !notification.isRead;
+    final secondaryColor =
+        isDark ? AppColors.darkGreyText : AppColors.greyText;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         decoration: BoxDecoration(
-          color: unread
-              ? _iconColor.withValues(alpha: 0.06)
-              : surface,
+          color: unread ? _iconColor.withValues(alpha: 0.06) : surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: unread ? _iconColor.withValues(alpha: 0.3) : border,
@@ -148,9 +163,8 @@ class _NotificationCard extends StatelessWidget {
                           notification.title,
                           style: TextStyle(
                             fontSize: 15,
-                            fontWeight: unread
-                                ? FontWeight.w900
-                                : FontWeight.w700,
+                            fontWeight:
+                                unread ? FontWeight.w900 : FontWeight.w700,
                           ),
                         ),
                       ),
@@ -168,16 +182,13 @@ class _NotificationCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     notification.body,
-                    style: const TextStyle(
-                        color: AppColors.greyText,
-                        fontSize: 14,
-                        height: 1.4),
+                    style: TextStyle(
+                        color: secondaryColor, fontSize: 14, height: 1.4),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    _timeAgo(notification.createdAt),
-                    style: const TextStyle(
-                        color: AppColors.greyText, fontSize: 12),
+                    _timeAgo(notification.createdAt, context),
+                    style: TextStyle(color: secondaryColor, fontSize: 12),
                   ),
                 ],
               ),
@@ -194,6 +205,7 @@ class _NotificationCard extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    context.watch<SettingsState>();
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -204,14 +216,15 @@ class _EmptyState extends StatelessWidget {
             color: AppColors.greyText.withValues(alpha: 0.4),
           ),
           const SizedBox(height: 16),
-          const Text('Sin notificaciones',
-              style:
-                  TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          Text(
+            context.t('no_notifications'),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
-          const Text(
-            'Las notificaciones de postulaciones,\naceptaciones y calificaciones aparecerán aquí.',
+          Text(
+            context.t('no_notifications_desc'),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
                 color: AppColors.greyText, fontSize: 15, height: 1.4),
           ),
         ],

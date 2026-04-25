@@ -18,6 +18,7 @@ class ApplicationModel {
 
   // ── Rating / completion (Feature 8) ──────────────────────────────────────
   bool isCompleted;
+  DateTime? completedAt;
   double? rating;            // overall 1.0 – 5.0
   String? ratingFeedback;
   double? ratingPunctuality;
@@ -39,6 +40,7 @@ class ApplicationModel {
     this.availability = 'flexible',
     this.motivationLetter = '',
     this.isCompleted = false,
+    this.completedAt,
     this.rating,
     this.ratingFeedback,
     this.ratingPunctuality,
@@ -68,6 +70,9 @@ class ApplicationModel {
       availability: j['availability'] as String? ?? 'flexible',
       motivationLetter: j['motivation_letter'] as String? ?? '',
       isCompleted: j['is_completed'] as bool? ?? false,
+      completedAt: j['completed_at'] != null
+          ? DateTime.parse(j['completed_at'] as String)
+          : null,
       rating: (j['rating'] as num?)?.toDouble(),
       ratingFeedback: j['rating_feedback'] as String?,
       ratingPunctuality: (j['rating_punctuality'] as num?)?.toDouble(),
@@ -98,6 +103,7 @@ class ApplicationModel {
         'availability': availability,
         'motivation_letter': motivationLetter,
         'is_completed': isCompleted,
+        'completed_at': completedAt?.toIso8601String(),
         'rating': rating,
         'rating_feedback': ratingFeedback,
         'rating_punctuality': ratingPunctuality,

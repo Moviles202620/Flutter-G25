@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
+import '../../../app/localization.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
 import '../../../models/offer_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/notification_service.dart';
+import '../../../utils/offer_form_utils.dart';
 
 class StaffCreateOfferFormPage extends StatefulWidget {
   const StaffCreateOfferFormPage({super.key});
@@ -24,12 +27,11 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
   final _durationCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
 
-  String? _categoria;
-  bool _presencial = true;
+  String? _category;
+  bool _isOnSite = true;
   bool _publishing = false;
-
-  DateTime? _fecha;
-  TimeOfDay? _hora;
+  DateTime? _jobDate;
+  TimeOfDay? _jobTime;
   DateTime? _deadline;
 
   @override
@@ -43,27 +45,26 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
     super.dispose();
   }
 
-  // ── Date / time pickers ───────────────────────────────────────────────────
-
-  Future<void> _pickFecha() async {
+  Future<void> _pickJobDate() async {
     final now = DateTime.now();
+    final firstAllowedDate = DateTime(now.year, now.month, now.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _fecha ?? now,
-      firstDate: DateTime(now.year - 1),
+      initialDate: _jobDate ?? firstAllowedDate,
+      firstDate: firstAllowedDate,
       lastDate: DateTime(now.year + 3),
-      builder: _yellowTheme,
+      builder: _pickerTheme,
     );
-    if (picked != null) setState(() => _fecha = picked);
+    if (picked != null) setState(() => _jobDate = picked);
   }
 
-  Future<void> _pickHora() async {
+  Future<void> _pickJobTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: _hora ?? TimeOfDay.now(),
-      builder: _yellowTheme,
+      initialTime: _jobTime ?? TimeOfDay.now(),
+      builder: _pickerTheme,
     );
-    if (picked != null) setState(() => _hora = picked);
+    if (picked != null) setState(() => _jobTime = picked);
   }
 
   Future<void> _pickDeadline() async {
@@ -71,56 +72,51 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
     final picked = await showDatePicker(
       context: context,
       initialDate: _deadline ?? now.add(const Duration(days: 7)),
-      firstDate: now,
+      firstDate: DateTime(now.year, now.month, now.day),
       lastDate: DateTime(now.year + 3),
-      helpText: 'FECHA LÍMITE DE POSTULACIÓN',
-      builder: _yellowTheme,
+      builder: _pickerTheme,
     );
     if (picked != null) setState(() => _deadline = picked);
   }
 
-  Widget _yellowTheme(BuildContext context, Widget? child) {
+  Widget _pickerTheme(BuildContext context, Widget? child) {
     return Theme(
       data: Theme.of(context).copyWith(
         colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.primaryYellow,
-              onPrimary: Colors.black,
-            ),
+          primary: AppColors.primaryYellow,
+          onPrimary: Colors.black,
+        ),
       ),
       child: child!,
     );
   }
 
-  // ── Formatters ────────────────────────────────────────────────────────────
-
-  String _formatFecha(DateTime? d) {
-    if (d == null) return 'mm/dd/yyyy';
-    return '${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}/${d.year}';
-  }
-
-  String _formatHora(TimeOfDay? t) {
-    if (t == null) return '--:-- --';
-    final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
-    final mm = t.minute.toString().padLeft(2, '0');
-    final ampm = t.period == DayPeriod.am ? 'AM' : 'PM';
-    return '$h:$mm $ampm';
-  }
-
-  DateTime _buildDateTime() {
-    final base = _fecha ?? DateTime.now();
-    final t = _hora ?? TimeOfDay.now();
-    return DateTime(base.year, base.month, base.day, t.hour, t.minute);
-  }
-
-  // ── Publish ───────────────────────────────────────────────────────────────
-
   Future<void> _publish() async {
     if (!_formKey.currentState!.validate()) {
-      _showError('Por favor corrige los errores en el formulario');
+      _showError(context.t('err_form_errors'));
       return;
     }
-    if (_categoria == null || _categoria!.isEmpty) {
-      _showError('Por favor selecciona una categoría');
+    if (_category == null || _category!.isEmpty) {
+      _showError(context.t('err_select_category'));
+      return;
+    }
+
+    final scheduleError = validateScheduledDateTimeLocalized(
+      date: _jobDate,
+      time: _jobTime,
+      t: context.t,
+    );
+    if (scheduleError != null) {
+      _showError(scheduleError);
+      return;
+    }
+
+    final scheduledDateTime = buildScheduledDateTime(
+      date: _jobDate,
+      time: _jobTime,
+    );
+    if (scheduledDateTime == null) {
+      _showError(context.t('err_datetime_required'));
       return;
     }
 
@@ -128,545 +124,545 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
 
     final localOffer = OfferModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: _titleCtrl.text.trim(),
+      title: normalizeOfferTitle(_titleCtrl.text),
       description: _descCtrl.text.trim(),
       requirements: _requirementsCtrl.text.trim(),
-      category: _categoria!,
+      category: _category!,
       valueCop: int.tryParse(_valueCtrl.text.trim()) ?? 0,
-      dateTime: _buildDateTime(),
+      dateTime: scheduledDateTime,
       deadline: _deadline,
       durationHours: int.tryParse(_durationCtrl.text.trim()) ?? 0,
-      isOnSite: _presencial,
-      location: _presencial ? _locationCtrl.text.trim() : '',
+      isOnSite: _isOnSite,
+      location: _isOnSite ? _locationCtrl.text.trim() : '',
+      createdAt: DateTime.now(),
     );
 
-    // Capture AppState before the async gap
     final appState = context.read<AppState>();
-
     OfferModel savedOffer = localOffer;
     String? apiError;
+    var shouldPersistLocally = true;
+    final token = appState.authToken;
 
     try {
-      savedOffer = await ApiService.createOffer(localOffer);
-    } catch (e) {
-      apiError = e.toString();
+      if (token == null) {
+        throw const ApiException('Sesion expirada. Inicia sesion de nuevo.');
+      }
+      savedOffer = await ApiService.createOffer(localOffer, token);
+    } catch (error) {
+      apiError = error.toString();
+      if (error is ApiException) {
+        shouldPersistLocally = false;
+      }
     }
 
-    // Always save locally so the app works offline too
-    appState.addOffer(savedOffer);
-
-    // Fire OS banner + add in-app notifications
-    NotificationService.onOfferPublished(savedOffer.title);
-    appState.onOfferPublished(savedOffer);
-
-    setState(() => _publishing = false);
+    if (shouldPersistLocally) {
+      appState.addOffer(savedOffer);
+      NotificationService.onOfferPublished(savedOffer.title);
+      appState.onOfferPublished(savedOffer);
+    }
 
     if (!mounted) return;
+    setState(() => _publishing = false);
 
-    if (apiError != null) {
+    if (apiError != null && shouldPersistLocally) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Guardado localmente. Sin conexión al servidor.'),
+          content: Text(context.t('saved_locally')),
           backgroundColor: const Color(0xFFF59E0B),
           behavior: SnackBarBehavior.floating,
         ),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Oferta publicada exitosamente!'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      Navigator.pop(context);
+      return;
     }
 
+    if (apiError != null) {
+      _showError(apiError);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.t('offer_published')),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
     Navigator.pop(context);
   }
 
-  void _showError(String msg) {
+  void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
+        content: Text(message),
         backgroundColor: AppColors.danger,
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  String _formatDate(DateTime? date, {required String nullLabel}) {
+    if (date == null) return nullLabel;
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  String _formatTime(TimeOfDay? time, {required String nullLabel}) {
+    if (time == null) return nullLabel;
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minutes = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minutes $period';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final descCounter = '${_descCtrl.text.length} / 1000';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppColors.darkSurface : AppColors.surface;
+    final border = isDark ? AppColors.darkBorder : AppColors.border;
+    final secondary = isDark ? AppColors.darkGreyText : AppColors.greyText;
+    final textColor = isDark ? AppColors.darkModeText : AppColors.darkText;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: AppColors.surface,
+        backgroundColor: surface,
+        surfaceTintColor: surface,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+        title: Text(
+          context.t('create_offer'),
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
-        title: const Text('Crear oferta',
-            style: TextStyle(fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: SafeArea(
         child: Form(
           key: _formKey,
-          child: Stack(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
             children: [
-              ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                children: [
-                  const Text('Detalles de la oferta',
-                      style: TextStyle(
-                          fontSize: 26, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Completa los campos para publicar tu nueva solicitud.',
-                    style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.greyText,
-                        height: 1.25),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // ── Title + Description ─────────────────────────────────
-                  _Card(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _fieldLabel('TÍTULO'),
-                        const SizedBox(height: 10),
-                        TextFormField(
-                          controller: _titleCtrl,
-                          maxLength: 80,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                                RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]')),
-                          ],
-                          decoration: _inputDeco('Ejem: Monitoría de Cálculo'),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'El título es obligatorio';
-                            }
-                            if (v.trim().length < 3) {
-                              return 'Mínimo 3 caracteres';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-
-                        _fieldLabel('DESCRIPCIÓN'),
-                        const SizedBox(height: 10),
-                        TextFormField(
-                          controller: _descCtrl,
-                          maxLength: 1000,
-                          maxLines: 5,
-                          onChanged: (_) => setState(() {}),
-                          decoration: _inputDeco(
-                            'Describe las tareas, contexto y lo que\nesperas del postulante...',
-                            counterText: '',
-                          ),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'La descripción es obligatoria';
-                            }
-                            if (v.trim().length < 10) {
-                              return 'Mínimo 10 caracteres';
-                            }
-                            return null;
-                          },
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(descCounter,
-                              style: const TextStyle(
-                                  color: Color(0xFF9AA4B2))),
-                        ),
-                        const SizedBox(height: 14),
-
-                        // ── Requirements (NEW) ───────────────────────────
-                        _fieldLabel('REQUISITOS'),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Un requisito por línea',
-                          style: TextStyle(
-                              fontSize: 13, color: AppColors.greyText),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _requirementsCtrl,
-                          maxLines: 4,
-                          decoration: _inputDeco(
-                            'Ejem:\nNota en Cálculo >= 4.0\nDisponibilidad presencial',
-                          ),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Agrega al menos un requisito';
-                            }
-                            return null;
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // ── Category ────────────────────────────────────────────
-                  _Card(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _fieldLabel('CATEGORÍA'),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          initialValue: _categoria,
-                          items: const [
-                            DropdownMenuItem(
-                                value: 'Académico', child: Text('Académico')),
-                            DropdownMenuItem(
-                                value: 'Eventos', child: Text('Eventos')),
-                            DropdownMenuItem(
-                                value: 'Logística',
-                                child: Text('Logística')),
-                            DropdownMenuItem(
-                                value: 'Administrativo',
-                                child: Text('Administrativo')),
-                          ],
-                          onChanged: (v) => setState(() => _categoria = v),
-                          decoration: _inputDeco('Selecciona una categoría'),
-                          icon: const Icon(
-                              Icons.keyboard_arrow_down_rounded),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // ── Value, date, deadline, duration ─────────────────────
-                  _Card(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _fieldLabel('VALOR (COP)'),
-                        const SizedBox(height: 10),
-                        TextFormField(
-                          controller: _valueCtrl,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly
-                          ],
-                          decoration: _inputDeco('60000',
-                              prefixText: '\$  '),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'El valor es obligatorio';
-                            }
-                            final n = int.tryParse(v.trim());
-                            if (n == null || n <= 0) {
-                              return 'Ingresa un valor válido';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Job date + time
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _LabeledField(
-                                label: 'FECHA DEL TRABAJO',
-                                value: _formatFecha(_fecha),
-                                icon: Icons.calendar_month_outlined,
-                                onTap: _pickFecha,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _LabeledField(
-                                label: 'HORA',
-                                value: _formatHora(_hora),
-                                icon: Icons.access_time_rounded,
-                                onTap: _pickHora,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Deadline (NEW)
-                        _LabeledField(
-                          label: 'FECHA LÍMITE DE POSTULACIÓN',
-                          value: _deadline != null
-                              ? _formatFecha(_deadline)
-                              : 'Sin límite',
-                          icon: Icons.event_busy_outlined,
-                          onTap: _pickDeadline,
-                          isOptional: true,
-                        ),
-                        const SizedBox(height: 16),
-
-                        _fieldLabel('DURACIÓN ESTIMADA'),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _durationCtrl,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly
-                                ],
-                                decoration: _inputDeco('Ejem: 2'),
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) {
-                                    return 'Obligatorio';
-                                  }
-                                  final n = int.tryParse(v.trim());
-                                  if (n == null || n <= 0) {
-                                    return 'Valor inválido';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Text('Horas',
-                                style: TextStyle(
-                                    fontSize: 18,
-                                    color: AppColors.greyText,
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // ── Location (on-site toggle + address) ─────────────────
-                  _Card(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on_outlined,
-                                color: AppColors.greyText),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Text('Ubicación presencial',
-                                  style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700)),
-                            ),
-                            Switch(
-                              value: _presencial,
-                              activeThumbColor: AppColors.primaryYellow,
-                              onChanged: (v) =>
-                                  setState(() => _presencial = v),
-                            ),
-                          ],
-                        ),
-
-                        // Location address field (NEW – only when on-site)
-                        if (_presencial) ...[
-                          const SizedBox(height: 14),
-                          _fieldLabel('DIRECCIÓN / SALÓN'),
-                          const SizedBox(height: 10),
-                          TextFormField(
-                            controller: _locationCtrl,
-                            decoration: _inputDeco(
-                                'Ejem: Edificio ML, Salón ML-204'),
-                            validator: (v) {
-                              if (_presencial &&
-                                  (v == null || v.trim().isEmpty)) {
-                                return 'Indica la ubicación presencial';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+              Text(
+                context.t('offer_details'),
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  color: textColor,
+                ),
               ),
-
-              // ── Sticky publish button ─────────────────────────────────
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 18,
-                child: SizedBox(
-                  height: 58,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryYellow,
-                      foregroundColor: Colors.black,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+              const SizedBox(height: 6),
+              Text(
+                context.t('offer_subtitle'),
+                style: TextStyle(color: secondary, height: 1.25),
+              ),
+              const SizedBox(height: 16),
+              _FormSection(
+                surface: surface,
+                border: border,
+                child: Column(
+                  children: [
+                    _buildTextField(
+                      controller: _titleCtrl,
+                      label: context.t('title'),
+                      hint: context.t('hint_title'),
+                      maxLength: 80,
+                      validator: (v) => validateOfferTitleLocalized(v, context.t),
+                      surface: surface,
+                      border: border,
                     ),
-                    onPressed: _publishing ? null : _publish,
-                    child: _publishing
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.black54,
-                            ),
-                          )
-                        : const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('Publicar oferta',
-                                  style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w900)),
-                              SizedBox(width: 10),
-                              Icon(Icons.arrow_forward),
-                            ],
-                          ),
+                    const SizedBox(height: 14),
+                    _buildTextField(
+                      controller: _descCtrl,
+                      label: context.t('description'),
+                      hint: context.t('hint_description'),
+                      maxLines: 4,
+                      maxLength: 1000,
+                      validator: (v) => validateDescriptionLocalized(v, context.t),
+                      surface: surface,
+                      border: border,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildTextField(
+                      controller: _requirementsCtrl,
+                      label: context.t('requirements'),
+                      hint: context.t('hint_requirements'),
+                      maxLines: 4,
+                      validator: (v) => validateRequirementsLocalized(v, context.t),
+                      surface: surface,
+                      border: border,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              _FormSection(
+                surface: surface,
+                border: border,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _category,
+                  dropdownColor: surface,
+                  style: TextStyle(color: textColor, fontSize: 16),
+                  decoration: _inputDecoration(
+                    label: context.t('category'),
+                    hint: context.t('hint_select_category'),
+                    surface: surface,
+                    border: border,
                   ),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'Academico',
+                      child: Text(
+                        context.t('cat_academic'),
+                        style: TextStyle(color: textColor),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Administrativo',
+                      child: Text(
+                        context.t('cat_administrative'),
+                        style: TextStyle(color: textColor),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Investigacion',
+                      child: Text(
+                        context.t('cat_research'),
+                        style: TextStyle(color: textColor),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Otro',
+                      child: Text(
+                        context.t('cat_other'),
+                        style: TextStyle(color: textColor),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => setState(() => _category = value),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _FormSection(
+                surface: surface,
+                border: border,
+                child: Column(
+                  children: [
+                    _buildTextField(
+                      controller: _valueCtrl,
+                      label: context.t('value_cop'),
+                      hint: context.t('hint_value'),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return context.t('err_value_required');
+                        }
+                        final parsed = int.tryParse(value.trim());
+                        if (parsed == null || parsed <= 0) {
+                          return context.t('err_value_invalid');
+                        }
+                        return null;
+                      },
+                      surface: surface,
+                      border: border,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildTextField(
+                      controller: _durationCtrl,
+                      label: context.t('duration_label'),
+                      hint: context.t('hint_duration'),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return context.t('err_duration_required');
+                        }
+                        final parsed = int.tryParse(value.trim());
+                        if (parsed == null || parsed <= 0) {
+                          return context.t('err_duration_invalid');
+                        }
+                        return null;
+                      },
+                      surface: surface,
+                      border: border,
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PickerField(
+                            label: context.t('job_date'),
+                            value: _formatDate(
+                              _jobDate,
+                              nullLabel: context.t('select_date'),
+                            ),
+                            icon: Icons.calendar_month_outlined,
+                            onTap: _pickJobDate,
+                            surface: surface,
+                            border: border,
+                            secondary: secondary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _PickerField(
+                            label: context.t('time'),
+                            value: _formatTime(
+                              _jobTime,
+                              nullLabel: context.t('select_time'),
+                            ),
+                            icon: Icons.access_time_rounded,
+                            onTap: _pickJobTime,
+                            surface: surface,
+                            border: border,
+                            secondary: secondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _PickerField(
+                      label: context.t('deadline_label'),
+                      value: _formatDate(
+                        _deadline,
+                        nullLabel: context.t('no_deadline_label'),
+                      ),
+                      icon: Icons.event_busy_outlined,
+                      onTap: _pickDeadline,
+                      surface: surface,
+                      border: border,
+                      secondary: secondary,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              _FormSection(
+                surface: surface,
+                border: border,
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _isOnSite,
+                      activeThumbColor: AppColors.primaryYellow,
+                      title: Text(
+                        _isOnSite
+                            ? context.t('on_site')
+                            : context.t('remote'),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Text(
+                        _isOnSite
+                            ? context.t('on_site_subtitle')
+                            : context.t('remote_subtitle'),
+                        style: TextStyle(color: secondary),
+                      ),
+                      onChanged: (value) => setState(() => _isOnSite = value),
+                    ),
+                    if (_isOnSite) ...[
+                      const SizedBox(height: 12),
+                      _buildTextField(
+                        controller: _locationCtrl,
+                        label: context.t('location'),
+                        hint: context.t('hint_location'),
+                        validator: (value) {
+                          if (!_isOnSite) return null;
+                          if (value == null || value.trim().isEmpty) {
+                            return context.t('err_location_required');
+                          }
+                          return null;
+                        },
+                        surface: surface,
+                        border: border,
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
           ),
         ),
       ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: SizedBox(
+          height: 56,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryYellow,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: _publishing ? null : _publish,
+            child: _publishing
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.black,
+                    ),
+                  )
+                : Text(
+                    context.t('create_offer'),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+          ),
+        ),
+      ),
     );
   }
 
-  // ── Small helpers ─────────────────────────────────────────────────────────
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required Color surface,
+    required Color border,
+    String? Function(String?)? validator,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+    int maxLines = 1,
+    int? maxLength,
+  }) {
+    return TextFormField(
+      controller: controller,
+      validator: validator,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      maxLines: maxLines,
+      maxLength: maxLength,
+      decoration: _inputDecoration(
+        label: label,
+        hint: hint,
+        surface: surface,
+        border: border,
+      ),
+    );
+  }
 
-  Widget _fieldLabel(String text) => Text(
-        text,
-        style: const TextStyle(
-            letterSpacing: 1.1, fontWeight: FontWeight.w900),
-      );
-
-  InputDecoration _inputDeco(
-    String hint, {
-    String? prefixText,
-    String? counterText,
-  }) =>
-      InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF9AA4B2)),
-        prefixText: prefixText,
-        counterText: counterText,
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+  InputDecoration _inputDecoration({
+    required String label,
+    required String hint,
+    required Color surface,
+    required Color border,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: AppColors.primaryYellow,
+          width: 1.5,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppColors.primaryYellow, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.danger),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppColors.danger, width: 1.5),
-        ),
-      );
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.danger),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+      ),
+    );
+  }
 }
 
-// ── Reusable card wrapper ─────────────────────────────────────────────────────
-
-class _Card extends StatelessWidget {
+class _FormSection extends StatelessWidget {
   final Widget child;
-  const _Card({required this.child});
+  final Color surface;
+  final Color border;
 
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: child,
-      );
-}
-
-// ── Labeled tappable field ────────────────────────────────────────────────────
-
-class _LabeledField extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isOptional;
-
-  const _LabeledField({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.onTap,
-    this.isOptional = false,
+  const _FormSection({
+    required this.child,
+    required this.surface,
+    required this.border,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isPlaceholder = value.contains('mm/') ||
-        value.contains('--') ||
-        (isOptional && value == 'Sin límite');
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      child: child,
+    );
+  }
+}
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                letterSpacing: 1.1, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 10),
-        InkWell(
+class _PickerField extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color surface;
+  final Color border;
+  final Color secondary;
+
+  const _PickerField({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+    required this.surface,
+    required this.border,
+    required this.secondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        decoration: BoxDecoration(
+          color: surface,
           borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
+          border: Border.all(color: border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
+                Icon(icon, size: 18, color: AppColors.primaryYellow),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    value,
+                    label,
                     style: TextStyle(
-                      fontSize: 16,
-                      color: isPlaceholder
-                          ? const Color(0xFF9AA4B2)
-                          : AppColors.darkText,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: secondary,
                     ),
                   ),
                 ),
-                Icon(icon, color: AppColors.greyText),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

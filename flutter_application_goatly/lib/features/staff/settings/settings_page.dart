@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../app/theme.dart';
+import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
+import '../../../services/api_service.dart';
 import '../../../services/biometric_service.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -29,17 +31,14 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          // Dark Mode
-          _SettingTile(
+          // Theme
+          _TapableSetting(
             icon: Icons.dark_mode_rounded,
-            title: settings.getString('dark_mode'),
+            title: settings.getString('theme_mode'),
+            subtitle: _themeSubtitle(settings),
             surfaceColor: surfaceColor,
             borderColor: borderColor,
-            trailing: Switch(
-              value: settings.isDarkMode,
-              onChanged: (value) => context.read<SettingsState>().setDarkMode(value),
-              activeThumbColor: AppColors.primaryYellow,
-            ),
+            onTap: () => _showThemeDialog(context),
           ),
           const SizedBox(height: 12),
 
@@ -47,9 +46,7 @@ class SettingsPage extends StatelessWidget {
           _TapableSetting(
             icon: Icons.language_rounded,
             title: settings.getString('language'),
-            subtitle: settings.language == 'es'
-                ? settings.getString('spanish')
-                : settings.getString('english'),
+            subtitle: _languageSubtitle(settings),
             surfaceColor: surfaceColor,
             borderColor: borderColor,
             onTap: () => _showLanguageDialog(context),
@@ -90,7 +87,7 @@ class SettingsPage extends StatelessWidget {
           _TapableSetting(
             icon: Icons.privacy_tip_rounded,
             title: settings.getString('privacy'),
-            subtitle: 'Ver detalles',
+            subtitle: settings.getString('view_details_btn'),
             surfaceColor: surfaceColor,
             borderColor: borderColor,
             onTap: () => _showPrivacyDialog(context),
@@ -104,7 +101,7 @@ class SettingsPage extends StatelessWidget {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: Text(settings.getString('logout')),
-                  content: const Text('¿Deseas cerrar sesión?'),
+                  content: Text(settings.getString('confirm_logout_msg')),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
@@ -113,10 +110,10 @@ class SettingsPage extends StatelessWidget {
                     TextButton(
                       onPressed: () {
                         Navigator.pop(ctx);
-                        Navigator.of(context).pushNamedAndRemoveUntil(
-                          '/login',
-                          (route) => false,
-                        );
+                        context.read<AppState>().logout();
+                        Navigator.of(
+                          context,
+                        ).pushNamedAndRemoveUntil('/login', (route) => false);
                       },
                       child: Text(
                         settings.getString('logout'),
@@ -132,7 +129,9 @@ class SettingsPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.danger.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppColors.danger.withValues(alpha: 0.3),
+                ),
               ),
               child: Center(
                 child: Text(
@@ -151,6 +150,83 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  /// Syncs dark mode & language preferences to the backend (fire-and-forget).
+  void _syncPreferencesToBackend(BuildContext context) {
+    final appState = context.read<AppState>();
+    final token = appState.authToken;
+    final user = appState.user;
+    if (token == null || user == null) return;
+    final s = context.read<SettingsState>();
+    // ignore: unawaited_futures
+    ApiService.updateUserProfile(token, {
+      'name': user.name,
+      'department': user.department,
+      'language': s.language,
+      'is_dark_mode': s.isDarkMode,
+    }).then((_) {}).catchError((_) {}); // best-effort sync
+  }
+
+  String _themeSubtitle(SettingsState settings) {
+    switch (settings.themePreference) {
+      case 'light':
+        return settings.getString('light_mode');
+      case 'dark':
+        return settings.getString('dark_mode_option');
+      default:
+        return settings.getString('follow_system');
+    }
+  }
+
+  String _languageSubtitle(SettingsState settings) {
+    switch (settings.languagePreference) {
+      case 'es':
+        return settings.getString('spanish');
+      case 'en':
+        return settings.getString('english');
+      default:
+        return settings.getString('system_language');
+    }
+  }
+
+  void _showThemeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final settings = context.read<SettingsState>();
+        return AlertDialog(
+          title: Text(settings.getString('theme_mode')),
+          content: RadioGroup<String>(
+            groupValue: settings.themePreference,
+            onChanged: (value) {
+              if (value != null) {
+                settings.setThemePreference(value);
+                _syncPreferencesToBackend(context);
+                Navigator.pop(ctx);
+              }
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: Text(settings.getString('follow_system')),
+                  leading: const Radio<String>(value: 'system'),
+                ),
+                ListTile(
+                  title: Text(settings.getString('light_mode')),
+                  leading: const Radio<String>(value: 'light'),
+                ),
+                ListTile(
+                  title: Text(settings.getString('dark_mode_option')),
+                  leading: const Radio<String>(value: 'dark'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _showLanguageDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -162,16 +238,21 @@ class SettingsPage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               RadioGroup<String>(
-                groupValue: settings.language,
+                groupValue: settings.languagePreference,
                 onChanged: (value) {
                   if (value != null) {
-                    settings.setLanguage(value);
+                    settings.setLanguagePreference(value);
+                    _syncPreferencesToBackend(context);
                     Navigator.pop(ctx);
                   }
                 },
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    ListTile(
+                      title: Text(settings.getString('system_language')),
+                      leading: const Radio<String>(value: 'system'),
+                    ),
                     ListTile(
                       title: Text(settings.getString('spanish')),
                       leading: const Radio<String>(value: 'es'),
@@ -252,8 +333,8 @@ class SettingsPage extends StatelessWidget {
 
               if (newPasswordCtrl.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('La contraseña no puede estar vacía'),
+                  SnackBar(
+                    content: Text(settings.getString('err_empty_password')),
                     backgroundColor: AppColors.danger,
                   ),
                 );
@@ -279,7 +360,9 @@ class SettingsPage extends StatelessWidget {
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(settings.getString('invalid_current_password')),
+                    content: Text(
+                      settings.getString('invalid_current_password'),
+                    ),
                     backgroundColor: AppColors.danger,
                   ),
                 );
@@ -308,18 +391,18 @@ class SettingsPage extends StatelessWidget {
                 style: const TextStyle(height: 1.5),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Datos personales y privacidad:',
-                style: TextStyle(fontWeight: FontWeight.w700),
+              Text(
+                settings.getString('privacy_data_title'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
-              const Text(
-                '• Tus datos están protegidos según las políticas de la Universidad '
-                'de los Andes.\n'
-                '• No compartimos tu información con terceros.\n'
-                '• Puedes solicitar la eliminación de tu cuenta en cualquier momento.\n'
-                '• Utilizamos encriptación para proteger tus credenciales.',
-                style: TextStyle(height: 1.6, fontSize: 14, color: AppColors.greyText),
+              Text(
+                settings.getString('privacy_data_body'),
+                style: const TextStyle(
+                  height: 1.6,
+                  fontSize: 14,
+                  color: AppColors.greyText,
+                ),
               ),
             ],
           ),
@@ -417,18 +500,24 @@ class _BiometricToggleTileState extends State<_BiometricToggleTile> {
               children: [
                 Text(
                   widget.settings.getString('biometric_auth'),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _loading
                       ? '...'
                       : !_available
-                          ? widget.settings.getString('biometric_not_available')
-                          : _enabled
-                              ? widget.settings.getString('biometric_subtitle_on')
-                              : widget.settings.getString('biometric_subtitle_off'),
-                  style: const TextStyle(fontSize: 13, color: AppColors.greyText),
+                      ? widget.settings.getString('biometric_not_available')
+                      : _enabled
+                      ? widget.settings.getString('biometric_subtitle_on')
+                      : widget.settings.getString('biometric_subtitle_off'),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.greyText,
+                  ),
                 ),
               ],
             ),
@@ -446,47 +535,6 @@ class _BiometricToggleTileState extends State<_BiometricToggleTile> {
 }
 
 // ── Reusable tile widgets ─────────────────────────────────────────────────────
-
-class _SettingTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Widget trailing;
-  final Color surfaceColor;
-  final Color borderColor;
-
-  const _SettingTile({
-    required this.icon,
-    required this.title,
-    required this.trailing,
-    required this.surfaceColor,
-    required this.borderColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.primaryYellow),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            ),
-          ),
-          trailing,
-        ],
-      ),
-    );
-  }
-}
 
 class _TapableSetting extends StatelessWidget {
   final IconData icon;
@@ -526,7 +574,10 @@ class _TapableSetting extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(

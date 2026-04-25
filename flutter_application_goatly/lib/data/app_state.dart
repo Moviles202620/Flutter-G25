@@ -1,35 +1,96 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
-import '../models/user_model.dart';
-import '../models/offer_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/application_model.dart';
+import '../models/auth_session_model.dart';
+import '../models/historical_rating_summary.dart';
 import '../models/notification_model.dart';
-import '../services/notification_service.dart';
+import '../models/offer_model.dart';
+import '../models/user_model.dart';
 import '../services/api_service.dart';
-import '../services/cache_service.dart';
-import '../services/secure_storage_service.dart';
-import '../services/sync_service.dart';
-import '../services/connectivity_service.dart';
+import '../services/notification_service.dart';
 
 class AppState extends ChangeNotifier {
   UserModel? _user;
+  String? _authToken;
+  String? _refreshToken;
+  Uint8List? _profileImageBytes;
 
   final List<OfferModel> _offers = [];
   final List<ApplicationModel> _applications = [];
   final List<AppNotification> _notifications = [];
 
-  // ── Connectivity & offline state ──────────────────────────────────────────
-
+  // ── Connectivity & cache ───────────────────────────────────────────────────
   bool _isOnline = true;
-  int _pendingOpsCount = 0;
-  StreamSubscription<bool>? _connectivitySub;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   bool get isOnline => _isOnline;
-  int get pendingOpsCount => _pendingOpsCount;
 
-  // ── Getters ───────────────────────────────────────────────────────────────
+  static const _kOffersKey = 'cached_offers';
+  static const _kApplicationsKey = 'cached_applications';
+
+  void startConnectivityMonitoring() {
+    _connectivitySub?.cancel();
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final online = results.any((r) => r != ConnectivityResult.none);
+      if (online && !_isOnline) {
+        _isOnline = true;
+        notifyListeners();
+        loadStaffWorkspace();
+      } else if (!online && _isOnline) {
+        _isOnline = false;
+        notifyListeners();
+      }
+    });
+  }
+
+  void stopConnectivityMonitoring() {
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
+  }
+
+  /// Bridge called by app.dart on provider creation to start connectivity monitoring.
+  void initConnectivity() => startConnectivityMonitoring();
+
+  Future<void> _persistToCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _kOffersKey,
+      jsonEncode(_offers.map((o) => o.toJson()).toList()),
+    );
+    await prefs.setString(
+      _kApplicationsKey,
+      jsonEncode(_applications.map((a) => a.toJson()).toList()),
+    );
+  }
+
+  Future<void> _loadFromCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final offersJson = prefs.getString(_kOffersKey);
+    final appsJson = prefs.getString(_kApplicationsKey);
+    if (offersJson != null) {
+      final list = jsonDecode(offersJson) as List<dynamic>;
+      _offers
+        ..clear()
+        ..addAll(list.map((e) => OfferModel.fromJson(e as Map<String, dynamic>)));
+    }
+    if (appsJson != null) {
+      final list = jsonDecode(appsJson) as List<dynamic>;
+      _applications
+        ..clear()
+        ..addAll(list.map((e) => ApplicationModel.fromJson(e as Map<String, dynamic>)));
+    }
+    if (offersJson != null || appsJson != null) notifyListeners();
+  }
 
   UserModel? get user => _user;
+  String? get authToken => _authToken;
+  String? get refreshToken => _refreshToken;
+  Uint8List? get profileImageBytes => _profileImageBytes;
   bool get isLoggedIn => _user != null;
 
   List<OfferModel> get offers => List.unmodifiable(_offers);
@@ -48,113 +109,95 @@ class AppState extends ChangeNotifier {
   int get unreadNotificationCount =>
       _notifications.where((n) => !n.isRead).length;
 
-  // ── Connectivity monitoring (multi-threading: stream subscription) ─────────
+  // ── Offer state helpers ────────────────────────────────────────────────────
 
-  /// Subscribe to ConnectivityService stream.
-  /// When back online: flush the pending-operations queue (fire-and-forget).
-  void initConnectivity() {
-    _isOnline = ConnectivityService.isOnline;
-    _connectivitySub = ConnectivityService.onConnectivityChanged.listen((online) async {
-      final wasOffline = !_isOnline;
-      _isOnline = online;
-      notifyListeners();
+  bool isOfferUpcoming(OfferModel offer) => offer.offerState == OfferState.upcoming;
+  bool isOfferActive(OfferModel offer) => offer.offerState == OfferState.active;
+  bool isOfferClosed(OfferModel offer) => offer.offerState == OfferState.closed;
 
-      if (online && wasOffline) {
-        // Network restored — drain the write queue then refresh offers.
-        await SyncService.flushPendingOperations();
-        _pendingOpsCount = await SyncService.pendingCount();
-        _refreshOffersInBackground();
-        notifyListeners();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _connectivitySub?.cancel();
-    super.dispose();
-  }
-
-  // ── Cache-first startup load ───────────────────────────────────────────────
-
-  /// Called once at startup after login to serve cached data immediately,
-  /// then triggers a background network refresh.
-  Future<void> loadCachedData() async {
-    final cached = await CacheService.loadOffers();
-    if (cached != null && cached.isNotEmpty) {
-      _offers
-        ..clear()
-        ..addAll(cached);
-      notifyListeners();
+  /// Active offer (if any) — for Home cockpit hero card.
+  OfferModel? get activeOffer {
+    try {
+      return _offers.firstWhere(isOfferActive);
+    } catch (_) {
+      return null;
     }
-    _pendingOpsCount = await SyncService.pendingCount();
-    notifyListeners();
-
-    // Fire-and-forget background refresh (multi-threading strategy).
-    _refreshOffersInBackground();
   }
 
-  /// Background network fetch — does NOT block the UI thread.
-  void _refreshOffersInBackground() {
-    Future(() async {
-      try {
-        final fresh = await ApiService.getOffers();
-        await CacheService.saveOffers(fresh);
-        _offers
-          ..clear()
-          ..addAll(fresh);
-        notifyListeners();
-      } catch (_) {
-        // Silently ignore; UI already shows cached data.
-      }
-    });
+  /// Upcoming offers sorted by date.
+  List<OfferModel> get upcomingOffers =>
+      _offers.where(isOfferUpcoming).toList()
+        ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+  /// Closed offers that still have unrated accepted applicants.
+  List<OfferModel> get offersWithUnratedStudents {
+    return _offers.where((offer) {
+      if (!isOfferClosed(offer)) return false;
+      return _applications
+          .where((a) => a.offerId == offer.id && a.status == ApplicationStatus.accepted && !a.isCompleted)
+          .isNotEmpty;
+    }).toList();
   }
 
-  // ── AUTH ──────────────────────────────────────────────────────────────────
-
-  bool login({required String email, required String password}) {
-    final e = email.trim().toLowerCase();
-    if (!e.endsWith('@uniandes.edu.co')) return false;
+  Future<bool> login({required String email, required String password}) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.endsWith('@uniandes.edu.co')) return false;
     if (password.trim().length < 4) return false;
 
-    _user = UserModel(
-      name: 'Funcionario Uniandes',
-      email: e,
-      department: 'Administrativo',
-      university: 'Universidad de los Andes',
-    );
-
-    // Persist session token in secure storage for biometric offline unlock.
-    SecureStorageService.saveSession(e);
-
-    if (_offers.isEmpty && _applications.isEmpty) _seedMockData();
-
-    notifyListeners();
-    return true;
+    try {
+      final session = await ApiService.login(normalizedEmail, password);
+      if (session.user.role != 'staff') return false;
+      await _applySession(session);
+      return true;
+    } on ApiException {
+      return false;
+    }
   }
 
-  /// Biometric offline unlock: validates via cached token in secure storage,
-  /// no network call required.
-  bool loginWithBiometric(String email) {
-    final e = email.trim().toLowerCase();
-    if (!e.endsWith('@uniandes.edu.co')) return false;
+  Future<bool> loginWithBiometric({required String refreshToken}) async {
+    try {
+      final accessToken = await ApiService.refreshAccessToken(refreshToken);
+      final profile = await ApiService.getUserProfile(accessToken);
+      if (profile.role != 'staff') return false;
 
+      final session = AuthSessionModel(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        tokenType: 'bearer',
+        user: profile,
+      );
+      await _applySession(session);
+      return true;
+    } on ApiException {
+      return false;
+    }
+  }
+
+  Future<void> _applySession(AuthSessionModel session) async {
     _user = UserModel(
-      name: 'Funcionario Uniandes',
-      email: e,
-      department: 'Administrativo',
+      name: session.user.name,
+      email: session.user.email,
+      department: session.user.department,
       university: 'Universidad de los Andes',
     );
-
-    if (_offers.isEmpty && _applications.isEmpty) _seedMockData();
-
+    _authToken = session.accessToken;
+    _refreshToken = session.refreshToken;
+    _profileImageBytes = null;
+    _offers.clear();
+    _applications.clear();
+    _notifications.clear();
     notifyListeners();
-    return true;
+    await loadStaffWorkspace();
   }
 
   void logout() {
     _user = null;
-    SecureStorageService.clearTokens();
+    _authToken = null;
+    _refreshToken = null;
+    _profileImageBytes = null;
+    _offers.clear();
+    _applications.clear();
+    _notifications.clear();
     notifyListeners();
   }
 
@@ -169,55 +212,145 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── OFFERS ────────────────────────────────────────────────────────────────
+  void setProfileImageBytes(Uint8List? bytes) {
+    _profileImageBytes = bytes;
+    notifyListeners();
+  }
 
-  /// Cache-first offer fetch.
-  /// 1. Return cached data immediately (UI renders at once).
-  /// 2. Trigger background network refresh asynchronously.
-  Future<List<OfferModel>> fetchOffersWithCache() async {
-    final cached = await CacheService.loadOffers();
-    if (cached != null && cached.isNotEmpty) {
+  void setAuthToken(String token) {
+    _authToken = token;
+    notifyListeners();
+  }
+
+  OfferModel? getOfferById(String offerId) {
+    try {
+      return _offers.firstWhere((offer) => offer.id == offerId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  ApplicationModel? getApplicationById(String applicationId) {
+    try {
+      return _applications.firstWhere(
+        (application) => application.id == applicationId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  DateTime? getApplicationCompletionTime(ApplicationModel application) {
+    final offer = getOfferById(application.offerId);
+    if (offer == null) return null;
+    final duration = offer.durationHours > 0 ? offer.durationHours : 0;
+    return offer.dateTime.add(Duration(hours: duration));
+  }
+
+  bool canRateApplication(ApplicationModel application, {DateTime? now}) {
+    if (application.status != ApplicationStatus.accepted || application.isCompleted) {
+      return false;
+    }
+    final offer = getOfferById(application.offerId);
+    if (offer == null) return false;
+    // Can rate when offer is closed (by time or manually)
+    return isOfferClosed(offer);
+  }
+
+  HistoricalRatingSummary getHistoricalRatingSummary(String applicantName) {
+    final normalizedApplicantName = applicantName.trim().toLowerCase();
+    final ratedApplications =
+        _applications
+            .where(
+              (application) =>
+                  application.applicantName.trim().toLowerCase() ==
+                      normalizedApplicantName &&
+                  application.isCompleted &&
+                  application.rating != null,
+            )
+            .toList()
+          ..sort((a, b) {
+            final firstTimestamp = a.ratedAt ?? a.createdAt;
+            final secondTimestamp = b.ratedAt ?? b.createdAt;
+            return secondTimestamp.compareTo(firstTimestamp);
+          });
+
+    if (ratedApplications.isEmpty) {
+      return const HistoricalRatingSummary.empty();
+    }
+
+    double totalScore = 0;
+    double totalWeighted = 0;
+
+    for (final app in ratedApplications) {
+      final overall = app.rating ?? 0;
+      totalScore += overall;
+
+      final punctuality = app.ratingPunctuality ?? overall;
+      final quality = app.ratingQuality ?? overall;
+      final attitude = app.ratingAttitude ?? overall;
+      totalWeighted += quality * 0.4 + punctuality * 0.3 + attitude * 0.3;
+    }
+
+    final count = ratedApplications.length;
+    final lastRatedApplication = ratedApplications.first;
+
+    return HistoricalRatingSummary(
+      averageRating: totalScore / count,
+      weightedRating: totalWeighted / count,
+      ratedJobsCount: count,
+      lastRating: lastRatedApplication.rating,
+      lastRatedAt: lastRatedApplication.ratedAt,
+    );
+  }
+
+  Future<void> loadOffersFromBackend() async {
+    await loadStaffWorkspace();
+  }
+
+  Future<void> loadStaffWorkspace() async {
+    final token = _authToken;
+    if (token == null) return;
+
+    // Cache-first: render immediately from disk, then refresh from network.
+    await _loadFromCache();
+
+    try {
+      final myOffers = await ApiService.getMyOffers(token);
+      // Parallel fetch: all offer applications concurrently (multi-threading via Future.wait).
+      final applicationsByOffer = await Future.wait(
+        myOffers.map((offer) => ApiService.getStaffApplicationsByOffer(offer.id, token)),
+      );
+
       _offers
         ..clear()
-        ..addAll(cached);
+        ..addAll(myOffers);
+
+      _applications
+        ..clear()
+        ..addAll(applicationsByOffer.expand((applications) => applications));
+
       notifyListeners();
+      unawaited(_persistToCache()); // fire-and-forget background cache write
+    } on ApiException {
+      // Network unavailable — cached data already shown, keep it.
     }
-    _refreshOffersInBackground();
-    return _offers;
   }
 
-  /// Adds an offer in-memory. If online, posts to API; if offline, queues the
-  /// write as a pending operation so it syncs on reconnect.
-  Future<void> addOfferWithConnectivity(OfferModel offer) async {
-    _offers.insert(0, offer);
-    notifyListeners();
-
-    if (_isOnline) {
-      try {
-        final saved = await ApiService.createOffer(offer);
-        // Replace temp offer with server-assigned id version.
-        final idx = _offers.indexWhere((o) => o.id == offer.id);
-        if (idx != -1) _offers[idx] = saved;
-        await CacheService.saveOffers(List.from(_offers));
+  Future<bool> closeOffer(String offerId) async {
+    final token = _authToken;
+    if (token == null) return false;
+    try {
+      final updated = await ApiService.closeOffer(offerId, token);
+      final idx = _offers.indexWhere((o) => o.id == offerId);
+      if (idx != -1) {
+        _offers[idx] = updated;
         notifyListeners();
-      } catch (_) {
-        _queueOfferCreate(offer);
       }
-    } else {
-      _queueOfferCreate(offer);
+      return true;
+    } on ApiException {
+      return false;
     }
-  }
-
-  void _queueOfferCreate(OfferModel offer) {
-    CacheService.enqueuePendingOp({
-      'id': 'op_${DateTime.now().millisecondsSinceEpoch}',
-      'method': 'POST',
-      'endpoint': '/offers',
-      'body': offer.toJson(),
-      'createdAt': DateTime.now().toIso8601String(),
-    });
-    _pendingOpsCount++;
-    notifyListeners();
   }
 
   void addOffer(OfferModel offer) {
@@ -225,105 +358,74 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── APPLICATIONS ──────────────────────────────────────────────────────────
+  void updateOffer(OfferModel updated) {
+    final idx = _offers.indexWhere((o) => o.id == updated.id);
+    if (idx != -1) {
+      _offers[idx] = updated;
+      notifyListeners();
+    }
+  }
 
-  /// Optimistic status update: applies locally first, queues network call.
-  /// If offline the change is still visible; it will sync on reconnect.
+  void removeOffer(String offerId) {
+    _offers.removeWhere((o) => o.id == offerId);
+    _applications.removeWhere((a) => a.offerId == offerId);
+    notifyListeners();
+  }
+
   Future<void> setApplicationStatus(
-      String appId, ApplicationStatus newStatus) async {
+    String appId,
+    ApplicationStatus newStatus,
+  ) async {
     final idx = _applications.indexWhere((a) => a.id == appId);
     if (idx == -1) return;
 
     _applications[idx].status = newStatus;
-
     final app = _applications[idx];
 
     if (newStatus == ApplicationStatus.accepted) {
-      _addNotification(AppNotification(
-        id: 'n${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Aplicación aceptada',
-        body: '${app.applicantName} fue aceptado/a para "${app.offerTitle}".',
-        type: NotificationType.appAccepted,
-        createdAt: DateTime.now(),
-        relatedId: appId,
-      ));
-      _addNotification(AppNotification(
-        id: 'n${DateTime.now().millisecondsSinceEpoch + 1}',
-        title: 'Alerta estudiante',
-        body: '${app.applicantName} recibió su notificación de aceptación en "${app.offerTitle}".',
-        type: NotificationType.jobMatch,
-        createdAt: DateTime.now(),
-        relatedId: appId,
-      ));
-      NotificationService.onApplicationAccepted(app.applicantName, app.offerTitle);
+      _addNotification(
+        AppNotification(
+          id: 'n${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Aplicacion aceptada',
+          body: '${app.applicantName} fue aceptado/a para "${app.offerTitle}".',
+          type: NotificationType.appAccepted,
+          createdAt: DateTime.now(),
+          relatedId: appId,
+        ),
+      );
+      _addNotification(
+        AppNotification(
+          id: 'n${DateTime.now().millisecondsSinceEpoch + 1}',
+          title: 'Alerta estudiante',
+          body:
+              '${app.applicantName} recibio su notificacion de aceptacion en "${app.offerTitle}".',
+          type: NotificationType.jobMatch,
+          createdAt: DateTime.now(),
+          relatedId: appId,
+        ),
+      );
+      NotificationService.onApplicationAccepted(
+        app.applicantName,
+        app.offerTitle,
+      );
     } else if (newStatus == ApplicationStatus.rejected) {
-      _addNotification(AppNotification(
-        id: 'n${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Aplicación rechazada',
-        body: '${app.applicantName} fue rechazado/a de "${app.offerTitle}".',
-        type: NotificationType.appRejected,
-        createdAt: DateTime.now(),
-        relatedId: appId,
-      ));
-      NotificationService.onApplicationRejected(app.applicantName, app.offerTitle);
+      _addNotification(
+        AppNotification(
+          id: 'n${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Aplicacion rechazada',
+          body: '${app.applicantName} fue rechazado/a de "${app.offerTitle}".',
+          type: NotificationType.appRejected,
+          createdAt: DateTime.now(),
+          relatedId: appId,
+        ),
+      );
+      NotificationService.onApplicationRejected(
+        app.applicantName,
+        app.offerTitle,
+      );
     }
 
     notifyListeners();
-
-    // Enqueue network sync (optimistic — already applied locally).
-    if (_isOnline) {
-      try {
-        await ApiService.updateApplicationStatus(appId, newStatus);
-      } catch (_) {
-        _queueStatusUpdate(appId, newStatus);
-      }
-    } else {
-      _queueStatusUpdate(appId, newStatus);
-    }
-  }
-
-  void _queueStatusUpdate(String appId, ApplicationStatus status) {
-    CacheService.enqueuePendingOp({
-      'id': 'op_${DateTime.now().millisecondsSinceEpoch}',
-      'method': 'PATCH',
-      'endpoint': '/applications/$appId/status',
-      'body': {'status': status.name},
-      'createdAt': DateTime.now().toIso8601String(),
-    });
-    _pendingOpsCount++;
-    notifyListeners();
-  }
-
-  /// Cache-first applicant load for a specific offer.
-  Future<List<ApplicationModel>> fetchApplicantsWithCache(String offerId) async {
-    final cached = await CacheService.loadApplicants(offerId);
-    final local = getApplicationsByOffer(offerId);
-
-    if (cached != null && cached.isNotEmpty && local.isEmpty) {
-      for (final a in cached) {
-        if (!_applications.any((x) => x.id == a.id)) {
-          _applications.add(a);
-        }
-      }
-      notifyListeners();
-    }
-
-    // Background network refresh.
-    Future(() async {
-      try {
-        final fresh = await ApiService.getApplicationsByOffer(offerId);
-        await CacheService.saveApplicants(offerId, fresh);
-        for (final a in fresh) {
-          final idx = _applications.indexWhere((x) => x.id == a.id);
-          if (idx == -1) {
-            _applications.add(a);
-          }
-        }
-        notifyListeners();
-      } catch (_) {}
-    });
-
-    return getApplicationsByOffer(offerId);
   }
 
   List<ApplicationModel> getApplicationsByOffer(String offerId) =>
@@ -337,22 +439,26 @@ class AppState extends ChangeNotifier {
     String sortBy = 'gpa',
   }) {
     var list = getApplicationsByOffer(offerId);
-    if (minGpa != null) list = list.where((a) => a.gpa >= minGpa).toList();
-    if (semester != null) list = list.where((a) => a.semester == semester).toList();
+    if (minGpa != null) {
+      list = list.where((a) => a.gpa >= minGpa).toList();
+    }
+    if (semester != null) {
+      list = list.where((a) => a.semester == semester).toList();
+    }
     if (availability != null && availability.isNotEmpty) {
       list = list.where((a) => a.availability == availability).toList();
     }
-    list.sort((a, b) => switch (sortBy) {
-          'semester' => a.semester.compareTo(b.semester),
-          'date' => b.createdAt.compareTo(a.createdAt),
-          _ => b.gpa.compareTo(a.gpa),
-        });
+    list.sort(
+      (a, b) => switch (sortBy) {
+        'semester' => a.semester.compareTo(b.semester),
+        'date' => b.createdAt.compareTo(a.createdAt),
+        _ => b.gpa.compareTo(a.gpa),
+      },
+    );
     return list;
   }
 
-  // ── RATING ────────────────────────────────────────────────────────────────
-
-  Future<void> completeAndRate({
+  Future<bool> completeAndRate({
     required String appId,
     required double rating,
     required String feedback,
@@ -361,10 +467,31 @@ class AppState extends ChangeNotifier {
     required double attitude,
   }) async {
     final idx = _applications.indexWhere((a) => a.id == appId);
-    if (idx == -1) return;
-
+    if (idx == -1) return false;
     final app = _applications[idx];
+    if (!canRateApplication(app)) return false;
+
+    // Persist to backend first
+    final token = _authToken;
+    if (token != null) {
+      try {
+        await ApiService.rateApplication(
+          appId: appId,
+          token: token,
+          rating: rating,
+          feedback: feedback,
+          punctuality: punctuality,
+          quality: quality,
+          attitude: attitude,
+        );
+      } on ApiException {
+        return false; // Backend sync failed — do not mutate local state
+      }
+    }
+
+    // Local update (only reached when backend confirmed the rating)
     app.isCompleted = true;
+    app.completedAt = DateTime.now();
     app.rating = rating;
     app.ratingFeedback = feedback;
     app.ratingPunctuality = punctuality;
@@ -374,7 +501,7 @@ class AppState extends ChangeNotifier {
 
     _addNotification(AppNotification(
       id: 'n${DateTime.now().millisecondsSinceEpoch}',
-      title: 'Calificación enviada',
+      title: 'Calificacion enviada',
       body: 'Calificaste a ${app.applicantName} con ${rating.toStringAsFixed(1)} estrellas en "${app.offerTitle}".',
       type: NotificationType.ratingSubmitted,
       createdAt: DateTime.now(),
@@ -382,31 +509,25 @@ class AppState extends ChangeNotifier {
     ));
 
     NotificationService.onRatingSubmitted(app.applicantName, rating);
-
     notifyListeners();
+    return true;
   }
 
-  // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
-
-  void _addNotification(AppNotification n) => _notifications.insert(0, n);
+  void _addNotification(AppNotification notification) {
+    _notifications.insert(0, notification);
+  }
 
   void onOfferPublished(OfferModel offer) {
-    _addNotification(AppNotification(
-      id: 'n${DateTime.now().millisecondsSinceEpoch}',
-      title: 'Oferta publicada',
-      body: '"${offer.title}" ya está visible para los estudiantes.',
-      type: NotificationType.offerPublished,
-      createdAt: DateTime.now(),
-      relatedId: offer.id,
-    ));
-    _addNotification(AppNotification(
-      id: 'n${DateTime.now().millisecondsSinceEpoch + 1}',
-      title: 'Alerta estudiante',
-      body: 'Ana (Psicología, 19) recibió una alerta sobre "${offer.title}".',
-      type: NotificationType.jobMatch,
-      createdAt: DateTime.now(),
-      relatedId: offer.id,
-    ));
+    _addNotification(
+      AppNotification(
+        id: 'n${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Oferta publicada',
+        body: '"${offer.title}" ya esta visible para los estudiantes.',
+        type: NotificationType.offerPublished,
+        createdAt: DateTime.now(),
+        relatedId: offer.id,
+      ),
+    );
     notifyListeners();
   }
 
@@ -418,147 +539,9 @@ class AppState extends ChangeNotifier {
   }
 
   void markAllNotificationsRead() {
-    for (final n in _notifications) {
-      n.isRead = true;
+    for (final notification in _notifications) {
+      notification.isRead = true;
     }
     notifyListeners();
-  }
-
-  // ── SEED ──────────────────────────────────────────────────────────────────
-
-  void _seedMockData() {
-    final now = DateTime.now();
-
-    _offers.addAll([
-      OfferModel(
-        id: 'of1',
-        title: 'Monitoría de Cálculo',
-        description: 'Se busca monitor para acompañar a estudiantes de primer año en Cálculo Integral y Multivariable.',
-        requirements: 'Haber cursado Cálculo I con nota >= 4.0\nDisponibilidad presencial martes y jueves\nExperiencia en tutorías (deseable)',
-        category: 'Académico',
-        valueCop: 60000,
-        dateTime: now.add(const Duration(days: 2)),
-        deadline: now.add(const Duration(days: 10)),
-        durationHours: 2,
-        isOnSite: true,
-        location: 'Edificio ML, Salón ML-204',
-      ),
-      OfferModel(
-        id: 'of2',
-        title: 'Asistente de Biblioteca',
-        description: 'Apoyo en catalogación, atención al usuario y organización de material bibliográfico.',
-        requirements: 'Estudiante de cualquier carrera\nDisponibilidad lunes a viernes tarde\nHabilidades de servicio al cliente',
-        category: 'Administrativo',
-        valueCop: 50000,
-        dateTime: now.add(const Duration(days: 4)),
-        deadline: now.add(const Duration(days: 14)),
-        durationHours: 3,
-        isOnSite: false,
-        location: '',
-      ),
-    ]);
-
-    _applications.addAll([
-      ApplicationModel(
-        id: 'ap1',
-        applicantName: 'Juan Pérez',
-        applicantInitials: 'JP',
-        offerId: 'of1',
-        offerTitle: 'Monitoría de Cálculo',
-        createdAt: now.subtract(const Duration(hours: 3)),
-        status: ApplicationStatus.pending,
-        gpa: 4.5,
-        semester: 5,
-        career: 'Ing. de Sistemas',
-        availability: 'part_time',
-        motivationLetter: 'Tengo excelente desempeño en Cálculo y me apasiona enseñar.',
-      ),
-      ApplicationModel(
-        id: 'ap2',
-        applicantName: 'María García',
-        applicantInitials: 'MG',
-        offerId: 'of2',
-        offerTitle: 'Asistente de Biblioteca',
-        createdAt: now.subtract(const Duration(days: 1)),
-        status: ApplicationStatus.accepted,
-        gpa: 4.1,
-        semester: 4,
-        career: 'Literatura',
-        availability: 'flexible',
-        motivationLetter: 'Soy organizada y me encanta el ambiente de la biblioteca.',
-        isCompleted: true,
-        rating: 4.3,
-        ratingFeedback: 'Excelente actitud y puntualidad.',
-        ratingPunctuality: 5.0,
-        ratingQuality: 4.0,
-        ratingAttitude: 4.5,
-        ratedAt: now.subtract(const Duration(hours: 2)),
-      ),
-      ApplicationModel(
-        id: 'ap3',
-        applicantName: 'Carlos Ruiz',
-        applicantInitials: 'CR',
-        offerId: 'of1',
-        offerTitle: 'Monitoría de Cálculo',
-        createdAt: now.subtract(const Duration(days: 2)),
-        status: ApplicationStatus.pending,
-        gpa: 3.8,
-        semester: 6,
-        career: 'Matemáticas',
-        availability: 'full_time',
-        motivationLetter: 'Cursé Cálculo I, II y III con notas superiores a 4.5.',
-      ),
-      ApplicationModel(
-        id: 'ap4',
-        applicantName: 'Laura Molina',
-        applicantInitials: 'LM',
-        offerId: 'of1',
-        offerTitle: 'Monitoría de Cálculo',
-        createdAt: now.subtract(const Duration(hours: 10)),
-        status: ApplicationStatus.pending,
-        gpa: 4.8,
-        semester: 7,
-        career: 'Física',
-        availability: 'part_time',
-        motivationLetter: 'Soy monitora certificada por el Centro de Español.',
-      ),
-    ]);
-
-    _notifications.addAll([
-      AppNotification(
-        id: 'sn1',
-        title: 'Nueva postulación',
-        body: 'Laura Molina aplicó a "Monitoría de Cálculo".',
-        type: NotificationType.newApplication,
-        createdAt: now.subtract(const Duration(hours: 10)),
-        relatedId: 'ap4',
-      ),
-      AppNotification(
-        id: 'sn2',
-        title: 'Nueva postulación',
-        body: 'Juan Pérez aplicó a "Monitoría de Cálculo".',
-        type: NotificationType.newApplication,
-        createdAt: now.subtract(const Duration(hours: 3)),
-        relatedId: 'ap1',
-      ),
-      AppNotification(
-        id: 'sn3',
-        title: 'Alerta estudiante',
-        body: 'Ana (Psicología, 19) recibió una alerta sobre "Monitoría de Cálculo".',
-        type: NotificationType.jobMatch,
-        createdAt: now.subtract(const Duration(days: 2)),
-        relatedId: 'of1',
-        isRead: true,
-      ),
-      AppNotification(
-        id: 'sn4',
-        title: 'Calificación enviada',
-        body: 'Calificaste a María García con 4.3 estrellas en "Asistente de Biblioteca".',
-        type: NotificationType.ratingSubmitted,
-        createdAt: now.subtract(const Duration(hours: 2)),
-        relatedId: 'ap2',
-        isRead: true,
-      ),
-    ]);
   }
 }

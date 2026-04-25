@@ -1,28 +1,96 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
-class SettingsState extends ChangeNotifier {
-  bool _isDarkMode = false;
-  String _language = 'es'; // 'es' o 'en'
+class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
+  String _themePreference = 'system'; // 'system' | 'light' | 'dark'
+  String _languagePreference = 'system'; // 'system' | 'es' | 'en'
   String _currentPassword = 'default1234'; // Contraseña inicial de prueba
 
-  bool get isDarkMode => _isDarkMode;
-  String get language => _language;
+  SettingsState() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  bool get isDarkMode {
+    switch (_themePreference) {
+      case 'dark':
+        return true;
+      case 'light':
+        return false;
+      default:
+        return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+    }
+  }
+  String get language => _effectiveLanguage;
+  String get themePreference => _themePreference;
+  String get languagePreference => _languagePreference;
+
+  ThemeMode get themeMode {
+    switch (_themePreference) {
+      case 'dark':
+        return ThemeMode.dark;
+      case 'light':
+        return ThemeMode.light;
+      default:
+        return ThemeMode.system;
+    }
+  }
+
+  String get _effectiveLanguage {
+    if (_languagePreference == 'es' || _languagePreference == 'en') {
+      return _languagePreference;
+    }
+
+    final systemCode =
+        WidgetsBinding.instance.platformDispatcher.locale.languageCode
+            .toLowerCase();
+    return systemCode.startsWith('en') ? 'en' : 'es';
+  }
 
   void toggleDarkMode() {
-    _isDarkMode = !_isDarkMode;
-    notifyListeners();
+    setThemePreference(isDarkMode ? 'light' : 'dark');
   }
 
   void setDarkMode(bool value) {
-    _isDarkMode = value;
-    notifyListeners();
+    setThemePreference(value ? 'dark' : 'light');
   }
 
   void setLanguage(String lang) {
-    if (lang == 'es' || lang == 'en') {
-      _language = lang;
+    setLanguagePreference(lang);
+  }
+
+  void setThemePreference(String value) {
+    if (value != 'system' && value != 'light' && value != 'dark') return;
+    if (_themePreference == value) return;
+    _themePreference = value;
+    notifyListeners();
+  }
+
+  void setLanguagePreference(String lang) {
+    if (lang == 'system' || lang == 'es' || lang == 'en') {
+      if (_languagePreference == lang) return;
+      _languagePreference = lang;
       notifyListeners();
     }
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    if (_themePreference == 'system') {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (_languagePreference == 'system') {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   /// Valida la contraseña actual y cambia a una nueva
@@ -41,7 +109,12 @@ class SettingsState extends ChangeNotifier {
       'es': {
         'settings': 'Configuración',
         'dark_mode': 'Modo oscuro',
+        'theme_mode': 'Tema',
+        'follow_system': 'Seguir sistema',
+        'light_mode': 'Claro',
+        'dark_mode_option': 'Oscuro',
         'language': 'Idioma',
+        'system_language': 'Idioma del sistema',
         'change_password': 'Cambiar contraseña',
         'biometric_auth': 'Autenticación biométrica',
         'biometric_subtitle_on': 'Huella o rostro activos',
@@ -82,11 +155,322 @@ class SettingsState extends ChangeNotifier {
         'accepted_applications': 'Aplicaciones aceptadas (Pendientes)',
         'today': 'HOY',
         'no_accepted': 'Aún no tienes aplicaciones aceptadas.\nAcepta una desde Home.',
+        // ── David's Features ──
+        'analytics': 'Analíticas',
+        'acceptance_rate': 'Tasa de aceptación',
+        'acceptance_rate_dashboard': 'Dashboard de aceptación',
+        'total_apps': 'Total aplicaciones',
+        'accepted_label': 'Aceptadas',
+        'rejected_label': 'Rechazadas',
+        'pending_label': 'Pendientes',
+        'no_acceptance_data': 'No hay datos de aceptación disponibles',
+        'edit_offer': 'Editar oferta',
+        'delete_offer': 'Eliminar oferta',
+        'delete_offer_confirm': '¿Eliminar esta oferta?',
+        'delete_offer_body': 'Esta acción no se puede deshacer.',
+        'delete': 'Eliminar',
+        'offer_updated': 'Oferta actualizada correctamente',
+        'offer_deleted': 'Oferta eliminada correctamente',
+        'save': 'Guardar',
+        'profile_sync': 'Perfil sincronizado',
+        'profile_updated': 'Perfil actualizado correctamente',
+        'sync_preferences': 'Sincronizar preferencias',
+        'insights': 'Insights',
+        'smart_insights': 'Insights inteligentes',
+        'total_offers': 'Total ofertas',
+        'total_applications': 'Total aplicaciones',
+        'overall_acceptance_rate': 'Tasa de aceptación global',
+        'most_popular_offer': 'Oferta más popular',
+        'least_popular_offer': 'Oferta menos popular',
+        'avg_apps_per_offer': 'Promedio apps/oferta',
+        'applications_label': 'aplicaciones',
+        'loading': 'Cargando...',
+        'error_loading': 'Error al cargar datos',
+        'retry': 'Reintentar',
+        'title': 'Título',
+        'description': 'Descripción',
+        'requirements': 'Requisitos',
+        'category': 'Categoría',
+        'value_cop': 'Valor (COP)',
+        'duration_hours': 'Duración (horas)',
+        'location': 'Ubicación',
+        'on_site': 'Presencial',
+        'remote': 'Remoto',
+        'date': 'Fecha',
+        'deadline_label': 'Fecha límite',
+        'name': 'Nombre',
+        'department': 'Departamento',
+        // ── Guillermo's Features ──
+        'gpa_dashboard': 'GPA por Oferta',
+        'gpa_dashboard_title': 'Dashboard GPA',
+        'avg_gpa': 'GPA Promedio',
+        'min_gpa': 'GPA Mín.',
+        'max_gpa': 'GPA Máx.',
+        'total_applicants': 'Aplicantes',
+        'no_gpa_data': 'No hay datos de GPA disponibles',
+        'gpa_label': 'GPA',
+        'top_applicants': 'Top Aplicantes',
+        'top_applicants_title': 'Leaderboard',
+        'rank': 'Puesto',
+        'no_top_data': 'No hay datos de aplicantes',
+        'offers_applied': 'Ofertas aplicadas',
+        'search_applications': 'Buscar aplicaciones',
+        'search_hint': 'Nombre, carrera u oferta...',
+        'filter_semester': 'Semestre',
+        'no_search_results': 'Sin resultados',
+        'search_empty_hint': 'Escribe para buscar aplicaciones',
+        'status_badge': 'Estado',
+        'deadline_open': 'Abierta',
+        'deadline_soon': 'Cierra pronto',
+        'deadline_expired': 'Expirada',
+        'no_deadline': 'Sin fecha límite',
+        // ── BQ9 (David Hernandez) ─ GPA High Rate ──
+        'gpa_high_rate': 'GPA Alto por Oferta',
+        'gpa_high_rate_title': 'GPA ≥ 4.0 por Oferta',
+        'high_gpa_pct': '% con GPA ≥ 4.0',
+        'high_gpa_count': 'Con GPA ≥ 4.0',
+        'no_high_gpa_data': 'No hay datos de GPA alto disponibles',
+        // ── Form fields & hints ──
+        'offer_details': 'Detalles de la oferta',
+        'offer_subtitle': 'Completa los campos para publicar tu nueva solicitud.',
+        'hint_title': 'Ej: Monitoria de Calculo 2',
+        'hint_description': 'Describe las tareas, el contexto y lo que esperas del postulante.',
+        'hint_update_description': 'Actualiza la descripcion del labor',
+        'hint_requirements': 'Un requisito por linea',
+        'hint_update_requirements': 'Actualiza los requisitos',
+        'hint_select_category': 'Selecciona una categoria',
+        'hint_value': '60000',
+        'hint_duration': '2',
+        'hint_location': 'Ej: Edificio ML, salon 204',
+        'hint_name': 'Ingresa tu nombre',
+        'time': 'Hora',
+        'no_deadline_label': 'Sin limite',
+        'select_date': 'Seleccionar fecha',
+        'select_time': 'Seleccionar hora',
+        'job_date': 'Fecha del trabajo',
+        'on_site_subtitle': 'El labor requiere presencia fisica',
+        'remote_subtitle': 'El labor se puede realizar de forma remota',
+        'duration_label': 'Duracion estimada (horas)',
+        'value_label': 'Valor (COP)',
+        // ── Validation errors ──
+        'err_form_errors': 'Por favor corrige los errores en el formulario',
+        'err_select_category': 'Por favor selecciona una categoria',
+        'err_select_date': 'Selecciona la fecha del trabajo',
+        'err_select_time': 'Selecciona la hora del trabajo',
+        'err_past_datetime': 'La fecha y hora del trabajo no pueden ser anteriores al momento actual',
+        'err_datetime_required': 'Selecciona la fecha y la hora del trabajo',
+        'err_title_required': 'El titulo es obligatorio',
+        'err_title_emoji': 'El titulo no puede contener emojis',
+        'err_title_min': 'Minimo 3 caracteres',
+        'err_description_required': 'La descripcion es obligatoria',
+        'err_description_emoji': 'La descripcion no puede contener emojis',
+        'err_description_min': 'Minimo 10 caracteres',
+        'err_requirements_required': 'Agrega al menos un requisito',
+        'err_requirements_emoji': 'Los requisitos no pueden contener emojis',
+        'err_value_required': 'El valor es obligatorio',
+        'err_value_invalid': 'Ingresa un valor valido',
+        'err_duration_required': 'La duracion es obligatoria',
+        'err_duration_invalid': 'Ingresa una duracion valida',
+        'err_location_required': 'La ubicacion es obligatoria para labores presenciales',
+        // ── Offer actions ──
+        'offer_published': 'Oferta publicada exitosamente',
+        'saved_locally': 'Guardado localmente. Sin conexion al servidor.',
+        // ── Application detail ──
+        'application_detail': 'Detalle de aplicacion',
+        'academic_profile': 'Perfil academico',
+        'semester': 'Semestre',
+        'motivation_letter': 'Carta de motivacion',
+        'no_motivation_letter': 'El postulante no incluyo una carta de motivacion.',
+        'job_details': 'Detalles del labor',
+        'offer_label': 'Oferta',
+        'applied_on': 'Postulado el',
+        'status': 'Estado',
+        'estimated_completion': 'Finalizacion estimada',
+        'historical_rating': 'Promedio historico',
+        'weighted_avg': 'Ponderado',
+        'rated_jobs': 'Labores calificadas',
+        'last_rating': 'Ultima calificacion',
+        'no_rating_history': 'Sin historial de calificaciones.',
+        'status_pending': 'Pendiente de revision',
+        'status_accepted': 'Aceptada',
+        'status_rejected': 'Rechazada',
+        'availability_full': 'Tiempo completo',
+        'availability_part': 'Medio tiempo',
+        'availability_flexible': 'Flexible',
+        'reject': 'Rechazar',
+        'accept': 'Aceptar',
+        'complete_and_rate': 'Completar y calificar',
+        'application_rejected_banner': 'Aplicacion rechazada',
+        'job_completed_banner': 'Trabajo completado',
+        'rating_available_when': 'Disponible cuando el labor termine:',
+        'cannot_verify_time': 'No se pudo verificar la hora de finalizacion del labor.',
+        'student_label': 'Estudiante Uniandes',
+        // ── Rate student ──
+        'rate_student': 'Calificar estudiante',
+        'overall_rating_section': 'CALIFICACION GENERAL',
+        'rate_question': 'Como evaluas el desempeno general del estudiante?',
+        'categories_section': 'CATEGORIAS',
+        'punctuality': 'Puntualidad',
+        'work_quality': 'Calidad del trabajo',
+        'attitude': 'Actitud y disposicion',
+        'comments': 'Comentarios',
+        'hint_comments': 'Describe el desempeno del estudiante: puntualidad, calidad del trabajo y actitud.',
+        'submit_rating': 'Enviar calificacion',
+        'err_select_rating': 'Selecciona una calificacion general',
+        'err_write_comment': 'Escribe un comentario sobre el desempeno',
+        'cannot_rate_yet': 'Todavia no puedes calificar este labor. Espera a que termine el tiempo programado.',
+        'cannot_save_rating': 'No se pudo guardar la calificacion porque el labor aun no se puede cerrar.',
+        'rating_enabled_when': 'La calificacion se habilitara cuando el labor termine:',
+        // ── Edit profile ──
+        'edit_profile_title': 'Editar Perfil',
+        'full_name': 'Nombre completo',
+        'take_photo': 'Tomar foto',
+        'pick_gallery': 'Escoger de galería',
+        'remove_photo': 'Eliminar foto',
+        'photo_pick_error': 'No se pudo cargar la foto de perfil',
+        'err_name_required': 'El nombre es obligatorio',
+        'err_name_min': 'El nombre debe tener al menos 3 caracteres',
+        'err_name_letters_only': 'El nombre solo puede contener letras',
+        'err_dept_required': 'Por favor selecciona un departamento',
+        // ── Categories ──
+        'cat_academic': 'Academico',
+        'cat_administrative': 'Administrativo',
+        'cat_research': 'Investigacion',
+        'cat_other': 'Otro',
+        // ── Date formatting ──
+        'months': 'ene,feb,mar,abr,may,jun,jul,ago,sep,oct,nov,dic',
+        'date_of': 'de',
+        // ── Login page ──
+        'login_title': 'Iniciar sesión',
+        'login_btn': 'Ingresar',
+        'staff_access': 'Acceso exclusivo para Staff',
+        'email_label': 'Correo institucional',
+        'password_label': 'Contraseña',
+        'use_biometrics': 'Usar huella / rostro',
+        'forgot_password': '¿Olvidaste tu contraseña?',
+        'login_help_prefix': '¿Problemas para ingresar? ',
+        'contact_support': 'Contacta soporte',
+        'terms': 'Términos',
+        'help': 'Ayuda',
+        'err_fill_fields': 'Completa todos los campos',
+        'err_invalid_credentials': 'Credenciales inválidas (debe ser @uniandes.edu.co, mín. 4 caracteres)',
+        'err_no_biometric_session': 'No hay sesión guardada para biometría. Inicia sesión con contraseña primero.',
+        'err_restore_session': 'No se pudo restaurar la sesión. Inicia sesión con contraseña.',
+        'fingerprint_word': 'huella dactilar',
+        'face_word': 'reconocimiento facial',
+        'biometrics_word': 'biometría',
+        'and_word': ' y ',
+        'biometric_enabled_prefix': 'Podrás iniciar sesión con',
+        'biometric_enabled_suffix': 'en próximos accesos.',
+        // ── Home page ──
+        'activity_summary': 'RESUMEN DE ACTIVIDAD',
+        'pending_applications': 'Aplicaciones pendientes',
+        'active_offers': 'Ofertas activas',
+        'create_offer_action': 'Crear una oferta',
+        'chip_pending': 'PENDIENTE',
+        'chip_accepted': 'ACEPTADA',
+        'chip_rejected': 'RECHAZADA',
+        'search_tooltip': 'Buscar aplicaciones',
+        // ── Profile page ──
+        'stat_accepted': 'ACEPTADAS',
+        'stat_pending': 'PENDIENTES',
+        'stat_posts': 'POSTS',
+        'completed_label': 'Completado',
+        'logout_confirm_title': '¿Cerrar sesión?',
+        'logout_confirm_body': '¿Estás seguro de que deseas cerrar sesión?',
+        // ── Notifications page ──
+        'notifications_title': 'Notificaciones',
+        'mark_all_read': 'Marcar todo',
+        'time_just_now': 'Ahora mismo',
+        'time_ago_prefix': 'Hace',
+        'time_min_unit': 'min',
+        'time_hour_unit': 'h',
+        'time_day_unit': 'días',
+        'no_notifications': 'Sin notificaciones',
+        'no_notifications_desc': 'Las notificaciones de postulaciones,\naceptaciones y calificaciones aparecerán aquí.',
+        // ── Applicant list page ──
+        'applicants_title': 'Postulantes',
+        'filters_tooltip': 'Filtros',
+        'min_gpa_filter': 'GPA mínimo',
+        'any_option': 'Cualquiera',
+        'all_option': 'Todos',
+        'availability_label': 'Disponibilidad',
+        'sort_by_label': 'Ordenar por',
+        'highest_gpa_sort': 'Mayor GPA',
+        'most_recent_sort': 'Más reciente',
+        'no_results_filters': 'Sin resultados con estos filtros',
+        'no_applicants_yet': 'Aún no hay postulantes',
+        'adjust_filters_hint': 'Intenta ajustando el GPA mínimo, semestre o disponibilidad.',
+        'applicants_will_appear': 'Los postulantes aparecerán aquí cuando apliquen a esta oferta.',
+        'offline_banner': 'Sin conexión al servidor — mostrando datos locales',
+        // ── Live context card ──
+        'presence_confirmed_snack': 'Presencia confirmada con gesto de proximidad',
+        'live_context_title': 'Contexto en vivo',
+        'live_context_desc': 'Referencia rápida para labores presenciales mientras revisas o cierras el labor.',
+        'presence_confirmed_label': 'Presencia confirmada',
+        'move_hand_sensor': 'Mueve la mano frente al sensor',
+        'already_confirmed_label': 'Presencia ya confirmada',
+        'confirm_presence_btn': 'Confirmar presencia',
+        'device_stable_label': 'Dispositivo estable',
+        'high_movement_label': 'Mucho movimiento',
+        'stability_unavailable_label': 'Estabilidad no disponible',
+        // ── Settings page remaining ──
+        'view_details_btn': 'Ver detalles',
+        'confirm_logout_msg': '¿Deseas cerrar sesión?',
+        'err_empty_password': 'La contraseña no puede estar vacía',
+        'privacy_data_title': 'Datos personales y privacidad:',
+        'privacy_data_body': '• Tus datos están protegidos según las políticas de la Universidad de los Andes.\n• No compartimos tu información con terceros.\n• Puedes solicitar la eliminación de tu cuenta en cualquier momento.\n• Utilizamos encriptación para proteger tus credenciales.',
+        // ── Offer lifecycle ──
+        'offers': 'Ofertas',
+        'filter_all': 'Todas',
+        'state_upcoming': 'Próximo',
+        'state_active': 'Activa',
+        'state_closed': 'Cerrada',
+        'state_badge_upcoming': 'Próximo',
+        'state_badge_active': 'Abierta',
+        'state_badge_closing_soon': 'Cierra pronto',
+        'state_badge_closed': 'Cerrada',
+        'no_upcoming_offers_title': 'No hay ofertas próximas',
+        'no_upcoming_offers_sub': 'Crea una oferta para verla aquí.',
+        'no_active_offers_title': 'No hay ofertas activas',
+        'no_active_offers_sub': 'Las ofertas activas aparecerán aquí.',
+        'no_closed_offers_title': 'No hay ofertas cerradas',
+        'no_closed_offers_sub': 'Las ofertas finalizadas aparecerán aquí.',
+        'close_offer_btn': 'Cerrar labor ahora',
+        'close_offer_confirm_title': 'Cerrar labor',
+        'close_offer_confirm_body': '¿Deseas cerrar este labor antes de tiempo? Los estudiantes aceptados podrán ser calificados.',
+        'offer_closed_snack': 'Labor cerrado',
+        'error_closing_offer': 'Error al cerrar',
+        'sensor_active_banner': 'Sensores activos — los estudiantes pueden confirmar presencia',
+        'applicants_pending_section': 'Pendientes',
+        'applicants_accepted_section': 'Aceptados',
+        'applicants_rejected_section': 'Rechazados',
+        'rated_label': 'Calificado',
+        'rate_pending_label': 'Pendiente',
+        'no_accepted_students': 'Sin estudiantes aceptados',
+        // ── Cockpit (Home redesign) ──
+        'cockpit_active_now': 'Labor activo ahora',
+        'cockpit_upcoming': 'Próximos labores',
+        'cockpit_unrated': 'Sin calificar',
+        'cockpit_unrated_desc': 'Tienes estudiantes de labores cerrados que aún no han sido calificados.',
+        'cockpit_no_activity': 'Sin actividad',
+        'cockpit_no_activity_sub': 'Crea tu primera oferta para comenzar.',
+        // ── Profile hub ──
+        'profile_stats_title': 'Estadísticas acumuladas',
+        'stat_total_offers': 'Labores',
+        'stat_total_rated': 'Calificados',
+        'stat_avg_rating': 'Prom. Rating',
+        'average': 'Promedio',
       },
       'en': {
         'settings': 'Settings',
         'dark_mode': 'Dark Mode',
+        'theme_mode': 'Theme',
+        'follow_system': 'Follow system',
+        'light_mode': 'Light',
+        'dark_mode_option': 'Dark',
         'language': 'Language',
+        'system_language': 'System language',
         'change_password': 'Change Password',
         'biometric_auth': 'Biometric Authentication',
         'biometric_subtitle_on': 'Fingerprint or face active',
@@ -127,9 +511,315 @@ class SettingsState extends ChangeNotifier {
         'accepted_applications': 'Accepted Applications (Pending)',
         'today': 'TODAY',
         'no_accepted': 'You have no accepted applications yet.\nAccept one from Home.',
+        // ── David's Features ──
+        'analytics': 'Analytics',
+        'acceptance_rate': 'Acceptance Rate',
+        'acceptance_rate_dashboard': 'Acceptance Dashboard',
+        'total_apps': 'Total Applications',
+        'accepted_label': 'Accepted',
+        'rejected_label': 'Rejected',
+        'pending_label': 'Pending',
+        'no_acceptance_data': 'No acceptance data available',
+        'edit_offer': 'Edit Offer',
+        'delete_offer': 'Delete Offer',
+        'delete_offer_confirm': 'Delete this offer?',
+        'delete_offer_body': 'This action cannot be undone.',
+        'delete': 'Delete',
+        'offer_updated': 'Offer updated successfully',
+        'offer_deleted': 'Offer deleted successfully',
+        'save': 'Save',
+        'profile_sync': 'Profile synced',
+        'profile_updated': 'Profile updated successfully',
+        'sync_preferences': 'Sync preferences',
+        'insights': 'Insights',
+        'smart_insights': 'Smart Insights',
+        'total_offers': 'Total Offers',
+        'total_applications': 'Total Applications',
+        'overall_acceptance_rate': 'Overall Acceptance Rate',
+        'most_popular_offer': 'Most Popular Offer',
+        'least_popular_offer': 'Least Popular Offer',
+        'avg_apps_per_offer': 'Avg Apps/Offer',
+        'applications_label': 'applications',
+        'loading': 'Loading...',
+        'error_loading': 'Error loading data',
+        'retry': 'Retry',
+        'title': 'Title',
+        'description': 'Description',
+        'requirements': 'Requirements',
+        'category': 'Category',
+        'value_cop': 'Value (COP)',
+        'duration_hours': 'Duration (hours)',
+        'location': 'Location',
+        'on_site': 'On-site',
+        'remote': 'Remote',
+        'date': 'Date',
+        'deadline_label': 'Deadline',
+        'name': 'Name',
+        'department': 'Department',
+        // ── Guillermo's Features ──
+        'gpa_dashboard': 'GPA by Offer',
+        'gpa_dashboard_title': 'GPA Dashboard',
+        'avg_gpa': 'Avg GPA',
+        'min_gpa': 'Min GPA',
+        'max_gpa': 'Max GPA',
+        'total_applicants': 'Applicants',
+        'no_gpa_data': 'No GPA data available',
+        'gpa_label': 'GPA',
+        'top_applicants': 'Top Applicants',
+        'top_applicants_title': 'Leaderboard',
+        'rank': 'Rank',
+        'no_top_data': 'No applicant data available',
+        'offers_applied': 'Offers applied',
+        'search_applications': 'Search Applications',
+        'search_hint': 'Name, career or offer...',
+        'filter_semester': 'Semester',
+        'no_search_results': 'No results found',
+        'search_empty_hint': 'Type to search applications',
+        'status_badge': 'Status',
+        'deadline_open': 'Open',
+        'deadline_soon': 'Closing soon',
+        'deadline_expired': 'Expired',
+        'no_deadline': 'No deadline',
+        // ── BQ9 (David Hernandez) ─ GPA High Rate ──
+        'gpa_high_rate': 'GPA High Rate by Offer',
+        'gpa_high_rate_title': 'GPA ≥ 4.0 per Offer',
+        'high_gpa_pct': '% with GPA ≥ 4.0',
+        'high_gpa_count': 'With GPA ≥ 4.0',
+        'no_high_gpa_data': 'No high-GPA data available',
+        // ── Form fields & hints ──
+        'offer_details': 'Offer Details',
+        'offer_subtitle': 'Fill in the fields to publish your new request.',
+        'hint_title': 'e.g. Calculus 2 Tutoring',
+        'hint_description': 'Describe the tasks, context, and what you expect from the applicant.',
+        'hint_update_description': 'Update the job description',
+        'hint_requirements': 'One requirement per line',
+        'hint_update_requirements': 'Update the requirements',
+        'hint_select_category': 'Select a category',
+        'hint_value': '60000',
+        'hint_duration': '2',
+        'hint_location': 'e.g. ML Building, Room 204',
+        'hint_name': 'Enter your name',
+        'time': 'Time',
+        'no_deadline_label': 'No limit',
+        'select_date': 'Select date',
+        'select_time': 'Select time',
+        'job_date': 'Job date',
+        'on_site_subtitle': 'The job requires physical presence',
+        'remote_subtitle': 'The job can be done remotely',
+        'duration_label': 'Estimated duration (hours)',
+        'value_label': 'Value (COP)',
+        // ── Validation errors ──
+        'err_form_errors': 'Please fix the errors in the form',
+        'err_select_category': 'Please select a category',
+        'err_select_date': 'Select the job date',
+        'err_select_time': 'Select the job time',
+        'err_past_datetime': 'Date and time cannot be in the past',
+        'err_datetime_required': 'Select the date and time for the job',
+        'err_title_required': 'Title is required',
+        'err_title_emoji': 'Title cannot contain emojis',
+        'err_title_min': 'Minimum 3 characters',
+        'err_description_required': 'Description is required',
+        'err_description_emoji': 'Description cannot contain emojis',
+        'err_description_min': 'Minimum 10 characters',
+        'err_requirements_required': 'Add at least one requirement',
+        'err_requirements_emoji': 'Requirements cannot contain emojis',
+        'err_value_required': 'Value is required',
+        'err_value_invalid': 'Enter a valid value',
+        'err_duration_required': 'Duration is required',
+        'err_duration_invalid': 'Enter a valid duration',
+        'err_location_required': 'Location is required for on-site jobs',
+        // ── Offer actions ──
+        'offer_published': 'Offer published successfully',
+        'saved_locally': 'Saved locally. No server connection.',
+        // ── Application detail ──
+        'application_detail': 'Application Detail',
+        'academic_profile': 'Academic Profile',
+        'semester': 'Semester',
+        'motivation_letter': 'Motivation Letter',
+        'no_motivation_letter': 'The applicant did not include a motivation letter.',
+        'job_details': 'Job Details',
+        'offer_label': 'Offer',
+        'applied_on': 'Applied on',
+        'status': 'Status',
+        'estimated_completion': 'Estimated completion',
+        'historical_rating': 'Historical Rating',
+        'weighted_avg': 'Weighted',
+        'rated_jobs': 'Rated jobs',
+        'last_rating': 'Last rating',
+        'no_rating_history': 'No rating history.',
+        'status_pending': 'Pending review',
+        'status_accepted': 'Accepted',
+        'status_rejected': 'Rejected',
+        'availability_full': 'Full time',
+        'availability_part': 'Part time',
+        'availability_flexible': 'Flexible',
+        'reject': 'Reject',
+        'accept': 'Accept',
+        'complete_and_rate': 'Complete & Rate',
+        'application_rejected_banner': 'Application rejected',
+        'job_completed_banner': 'Job completed',
+        'rating_available_when': 'Available when the job ends:',
+        'cannot_verify_time': 'Could not verify the job end time.',
+        'student_label': 'Uniandes Student',
+        // ── Rate student ──
+        'rate_student': 'Rate Student',
+        'overall_rating_section': 'OVERALL RATING',
+        'rate_question': "How do you rate the student's overall performance?",
+        'categories_section': 'CATEGORIES',
+        'punctuality': 'Punctuality',
+        'work_quality': 'Work quality',
+        'attitude': 'Attitude & disposition',
+        'comments': 'Comments',
+        'hint_comments': "Describe the student's performance: punctuality, quality, and attitude.",
+        'submit_rating': 'Submit rating',
+        'err_select_rating': 'Select an overall rating',
+        'err_write_comment': 'Write a comment about the performance',
+        'cannot_rate_yet': 'You cannot rate this job yet. Wait until the scheduled time is over.',
+        'cannot_save_rating': 'Could not save the rating because the job cannot be closed yet.',
+        'rating_enabled_when': 'Rating will be enabled when the job ends:',
+        // ── Edit profile ──
+        'edit_profile_title': 'Edit Profile',
+        'full_name': 'Full name',
+        'take_photo': 'Take photo',
+        'pick_gallery': 'Choose from gallery',
+        'remove_photo': 'Remove photo',
+        'photo_pick_error': 'Could not load the profile photo',
+        'err_name_required': 'Name is required',
+        'err_name_min': 'Name must be at least 3 characters',
+        'err_name_letters_only': 'Name can only contain letters',
+        'err_dept_required': 'Please select a department',
+        // ── Categories ──
+        'cat_academic': 'Academic',
+        'cat_administrative': 'Administrative',
+        'cat_research': 'Research',
+        'cat_other': 'Other',
+        // ── Date formatting ──
+        'months': 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec',
+        'date_of': 'of',
+        // ── Login page ──
+        'login_title': 'Sign In',
+        'login_btn': 'Sign In',
+        'staff_access': 'Staff Access Only',
+        'email_label': 'Institutional Email',
+        'password_label': 'Password',
+        'use_biometrics': 'Use fingerprint / face',
+        'forgot_password': 'Forgot your password?',
+        'login_help_prefix': 'Having trouble signing in? ',
+        'contact_support': 'Contact support',
+        'terms': 'Terms',
+        'help': 'Help',
+        'err_fill_fields': 'Please fill in all fields',
+        'err_invalid_credentials': 'Invalid credentials (must be @uniandes.edu.co, min. 4 characters)',
+        'err_no_biometric_session': 'No biometric session saved. Sign in with your password first.',
+        'err_restore_session': 'Could not restore the session. Sign in with your password.',
+        'fingerprint_word': 'fingerprint',
+        'face_word': 'face recognition',
+        'biometrics_word': 'biometrics',
+        'and_word': ' and ',
+        'biometric_enabled_prefix': 'You can sign in with',
+        'biometric_enabled_suffix': 'on future visits.',
+        // ── Home page ──
+        'activity_summary': 'ACTIVITY SUMMARY',
+        'pending_applications': 'Pending applications',
+        'active_offers': 'Active offers',
+        'create_offer_action': 'Create an offer',
+        'chip_pending': 'PENDING',
+        'chip_accepted': 'ACCEPTED',
+        'chip_rejected': 'REJECTED',
+        'search_tooltip': 'Search applications',
+        // ── Profile page ──
+        'stat_accepted': 'ACCEPTED',
+        'stat_pending': 'PENDING',
+        'stat_posts': 'POSTS',
+        'completed_label': 'Completed',
+        'logout_confirm_title': 'Sign out?',
+        'logout_confirm_body': 'Are you sure you want to sign out?',
+        // ── Notifications page ──
+        'notifications_title': 'Notifications',
+        'mark_all_read': 'Mark all',
+        'time_just_now': 'Just now',
+        'time_ago_prefix': '',
+        'time_min_unit': 'min ago',
+        'time_hour_unit': 'h ago',
+        'time_day_unit': 'd ago',
+        'no_notifications': 'No notifications',
+        'no_notifications_desc': 'Application, acceptance and rating\nnotifications will appear here.',
+        // ── Applicant list page ──
+        'applicants_title': 'Applicants',
+        'filters_tooltip': 'Filters',
+        'min_gpa_filter': 'Min GPA',
+        'any_option': 'Any',
+        'all_option': 'All',
+        'availability_label': 'Availability',
+        'sort_by_label': 'Sort by',
+        'highest_gpa_sort': 'Highest GPA',
+        'most_recent_sort': 'Most recent',
+        'no_results_filters': 'No results with these filters',
+        'no_applicants_yet': 'No applicants yet',
+        'adjust_filters_hint': 'Try adjusting the min GPA, semester or availability.',
+        'applicants_will_appear': 'Applicants will appear here when they apply to this offer.',
+        'offline_banner': 'No server connection — showing local data',
+        // ── Live context card ──
+        'presence_confirmed_snack': 'Presence confirmed by proximity gesture',
+        'live_context_title': 'Live Context',
+        'live_context_desc': 'Quick reference for on-site jobs while reviewing or closing the job.',
+        'presence_confirmed_label': 'Presence confirmed',
+        'move_hand_sensor': 'Move your hand in front of the sensor',
+        'already_confirmed_label': 'Presence already confirmed',
+        'confirm_presence_btn': 'Confirm presence',
+        'device_stable_label': 'Device stable',
+        'high_movement_label': 'High movement',
+        'stability_unavailable_label': 'Stability unavailable',
+        // ── Settings page remaining ──
+        'view_details_btn': 'View details',
+        'confirm_logout_msg': 'Do you want to sign out?',
+        'err_empty_password': 'Password cannot be empty',
+        'privacy_data_title': 'Personal data and privacy:',
+        'privacy_data_body': '• Your data is protected under Universidad de los Andes policies.\n• We do not share your information with third parties.\n• You can request account deletion at any time.\n• We use encryption to protect your credentials.',
+        // ── Offer lifecycle ──
+        'offers': 'Offers',
+        'filter_all': 'All',
+        'state_upcoming': 'Soon',
+        'state_active': 'Active',
+        'state_closed': 'Closed',
+        'state_badge_upcoming': 'Soon',
+        'state_badge_active': 'Open',
+        'state_badge_closing_soon': 'Closing soon',
+        'state_badge_closed': 'Closed',
+        'no_upcoming_offers_title': 'No upcoming offers',
+        'no_upcoming_offers_sub': 'Create an offer to see it here.',
+        'no_active_offers_title': 'No active offers',
+        'no_active_offers_sub': 'Active offers will appear here.',
+        'no_closed_offers_title': 'No closed offers',
+        'no_closed_offers_sub': 'Finished offers will appear here.',
+        'close_offer_btn': 'Close Labor Now',
+        'close_offer_confirm_title': 'Close Labor',
+        'close_offer_confirm_body': 'Close this labor early? Accepted students can then be rated.',
+        'offer_closed_snack': 'Labor closed',
+        'error_closing_offer': 'Error closing offer',
+        'sensor_active_banner': 'Sensors active — students can confirm presence',
+        'applicants_pending_section': 'Pending',
+        'applicants_accepted_section': 'Accepted',
+        'applicants_rejected_section': 'Rejected',
+        'rated_label': 'Rated',
+        'rate_pending_label': 'Pending',
+        'no_accepted_students': 'No accepted students',
+        // ── Cockpit (Home redesign) ──
+        'cockpit_active_now': 'Active Labor Now',
+        'cockpit_upcoming': 'Upcoming Labors',
+        'cockpit_unrated': 'Needs Rating',
+        'cockpit_unrated_desc': 'You have students from closed labors that still need a rating.',
+        'cockpit_no_activity': 'No activity',
+        'cockpit_no_activity_sub': 'Create your first offer to get started.',
+        // ── Profile hub ──
+        'profile_stats_title': 'Cumulative Stats',
+        'stat_total_offers': 'Labors',
+        'stat_total_rated': 'Rated',
+        'stat_avg_rating': 'Avg. Rating',
+        'average': 'Average',
       }
     };
 
-    return translations[_language]?[key] ?? key;
+    return translations[_effectiveLanguage]?[key] ?? key;
   }
 }
