@@ -13,6 +13,7 @@ import '../models/offer_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
+import '../services/sync_service.dart';
 
 class AppState extends ChangeNotifier {
   UserModel? _user;
@@ -41,6 +42,7 @@ class AppState extends ChangeNotifier {
         _isOnline = true;
         notifyListeners();
         loadStaffWorkspace();
+        unawaited(SyncService.flushPendingOperations());
       } else if (!online && _isOnline) {
         _isOnline = false;
         notifyListeners();
