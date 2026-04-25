@@ -13,7 +13,10 @@ class StaffCreateOffersPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final offers = context.watch<AppState>().offers;
+    final appState = context.watch<AppState>();
+    final offers = appState.offers;
+    final isOnline = appState.isOnline;
+    final pendingOps = appState.pendingOpsCount;
     context.watch<SettingsState>(); // Escuchar cambios
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -31,26 +34,51 @@ class StaffCreateOffersPage extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+      body: Column(
         children: [
-          if (offers.isEmpty)
-            _EmptyOffers(
-              isDark: isDark,
-            ),
-          ...offers.map((o) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ApplicantListPage(offer: o),
+          if (!isOnline)
+            Container(
+              width: double.infinity,
+              color: Colors.orange.shade700,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.wifi_off, color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      pendingOps > 0
+                          ? 'Sin conexión — $pendingOps oferta(s) en cola para sincronizar'
+                          : 'Sin conexión — las nuevas ofertas se guardarán localmente',
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
                     ),
                   ),
-                  child: _OfferCard(offer: o, isDark: isDark),
+                ],
+              ),
+            ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+              children: [
+                if (offers.isEmpty) _EmptyOffers(isDark: isDark),
+                ...offers.map(
+                  (o) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ApplicantListPage(offer: o),
+                        ),
+                      ),
+                      child: _OfferCard(offer: o, isDark: isDark),
+                    ),
+                  ),
                 ),
-              )),
+              ],
+            ),
+          ),
         ],
       ),
       bottomSheet: Container(

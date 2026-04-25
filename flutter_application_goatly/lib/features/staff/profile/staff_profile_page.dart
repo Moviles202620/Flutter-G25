@@ -163,7 +163,7 @@ class StaffProfilePage extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: AppColors.primaryYellow.withOpacity(0.2),
+                              color: AppColors.primaryYellow.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: const Text(
@@ -264,7 +264,7 @@ class _SoftButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = filled ? AppColors.primaryYellow.withOpacity(0.2) : (isDark ? AppColors.darkSurface : Colors.white);
+    final bg = filled ? AppColors.primaryYellow.withValues(alpha: 0.2) : (isDark ? AppColors.darkSurface : Colors.white);
     final border = filled ? Colors.transparent : (isDark ? AppColors.darkBorder : AppColors.border);
     final color = filled ? const Color(0xFF9A5B00) : AppColors.greyText;
 

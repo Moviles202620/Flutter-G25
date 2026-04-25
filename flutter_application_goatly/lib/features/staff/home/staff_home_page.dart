@@ -14,12 +14,14 @@ class StaffHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final apps = context.watch<AppState>().pendingApplications;
+    final appState = context.watch<AppState>();
+    final apps = appState.pendingApplications;
+    final isOnline = appState.isOnline;
     context.watch<SettingsState>(); // Escuchar cambios de idioma y tema
-    
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg = isDark ? AppColors.darkSurface : AppColors.surface;
-    
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -75,7 +77,31 @@ class StaffHomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: apps.isEmpty ? const _EmptyState() : _HomeWithApps(apps: apps),
+      body: Column(
+        children: [
+          if (!isOnline)
+            Container(
+              width: double.infinity,
+              color: Colors.orange.shade700,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+              child: Row(
+                children: const [
+                  Icon(Icons.wifi_off, color: Colors.white, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Sin conexión — mostrando datos en caché',
+                      style: TextStyle(color: Colors.white, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: apps.isEmpty ? const _EmptyState() : _HomeWithApps(apps: apps),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -254,9 +280,9 @@ class _ApplicationCard extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: AppColors.primaryYellow.withOpacity(0.15),
+              color: AppColors.primaryYellow.withValues(alpha: 0.15),
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primaryYellow.withOpacity(0.35)),
+              border: Border.all(color: AppColors.primaryYellow.withValues(alpha: 0.35)),
             ),
             child: Center(
               child: Text(

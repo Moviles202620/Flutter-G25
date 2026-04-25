@@ -227,7 +227,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _selectedDepartment,
+                initialValue: _selectedDepartment,
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.business_outlined),
                   filled: true,
