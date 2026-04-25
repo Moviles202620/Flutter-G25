@@ -82,8 +82,7 @@ class ApiService {
       throw ApiException(
           'Error al publicar oferta (${res.statusCode}): ${res.body}');
     }
-    return OfferModel.fromJson(
-        jsonDecode(res.body) as Map<String, dynamic>);
+    return OfferModel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   /// GET /offers  →  all offers published by staff.
@@ -121,7 +120,6 @@ class ApiService {
   // ── Feature 2 ─ Applicant List View ──────────────────────────────────────
 
   /// GET /offers/{offerId}/applications
-  /// Returns the full list of applicants for a given job offer.
   static Future<List<ApplicationModel>> getApplicationsByOffer(
       String offerId) async {
     final res = await http
@@ -165,15 +163,12 @@ class ApiService {
   // ── Feature 3 ─ Applicant Filter ─────────────────────────────────────────
 
   /// GET /offers/{offerId}/applications?gpa_min=&semester=&availability=
-  ///
-  /// The backend dynamically queries and re-ranks the results.
-  /// Any null parameter is omitted from the query string.
   static Future<List<ApplicationModel>> filterApplications({
     required String offerId,
     double? minGpa,
     int? semester,
-    String? availability, // 'full_time' | 'part_time' | 'flexible'
-    String? sortBy,       // 'gpa' | 'semester' | 'date'
+    String? availability,
+    String? sortBy,
   }) async {
     final query = <String, String>{};
     if (minGpa != null) query['gpa_min'] = minGpa.toStringAsFixed(2);
@@ -202,7 +197,7 @@ class ApiService {
 
   // ── Application status ────────────────────────────────────────────────────
 
-  /// PATCH /applications/{appId}/status  →  { "status": "accepted" | "rejected" }
+  /// PATCH /applications/{appId}/status
   static Future<void> updateApplicationStatus(
       String appId, ApplicationStatus status) async {
     final res = await http
@@ -465,6 +460,25 @@ class ApiService {
     }
     final list = jsonDecode(res.body) as List<dynamic>;
     return list.cast<Map<String, dynamic>>();
+  }
+
+  // ── BQ7 (Santiago Reyes) ─ Time to First Application ──────────────────
+
+  /// GET /analytics/time-to-first-application
+  /// BQ7: Average days between offer publication and first application received.
+  static Future<Map<String, dynamic>> getTimeToFirstApplication() async {
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/analytics/time-to-first-application'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener analítica (${res.statusCode})');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
   }
 }
 

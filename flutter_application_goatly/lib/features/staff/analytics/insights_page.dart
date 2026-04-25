@@ -210,7 +210,7 @@ class _InsightsPageState extends State<InsightsPage> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: (valueColor ?? AppColors.primaryYellow).withOpacity(0.12),
+              color: (valueColor ?? AppColors.primaryYellow).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: valueColor ?? AppColors.primaryYellow),

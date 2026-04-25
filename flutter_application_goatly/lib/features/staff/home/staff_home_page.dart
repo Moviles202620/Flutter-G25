@@ -82,14 +82,40 @@ class StaffHomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: hasAnything
-          ? _CockpitBody(
-              activeOffer: activeOffer,
-              upcoming: upcoming,
-              unrated: unrated,
-              isDark: isDark,
-            )
-          : const _EmptyState(),
+      body: Column(
+        children: [
+          if (!state.isOnline)
+            Container(
+              width: double.infinity,
+              color: Colors.orange,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.wifi_off, size: 16, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text(
+                    context.t('offline_banner'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: hasAnything
+                ? _CockpitBody(
+                    activeOffer: activeOffer,
+                    upcoming: upcoming,
+                    unrated: unrated,
+                    isDark: isDark,
+                  )
+                : const _EmptyState(),
+          ),
+        ],
+      ),
     );
   }
 }

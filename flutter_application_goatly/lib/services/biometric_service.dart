@@ -1,5 +1,6 @@
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'secure_storage_service.dart';
 
 /// Wraps Android BiometricPrompt / iOS LocalAuthentication via local_auth.
 /// Supports fingerprint sensor and face recognition camera.
@@ -8,7 +9,6 @@ class BiometricService {
 
   static const _keyEnabled = 'biometric_enabled';
   static const _keyEmail = 'biometric_email';
-  static const _keyRefreshToken = 'biometric_refresh_token';
 
   // ── Hardware & enrollment check ──────────────────────────────────────────
 
@@ -85,21 +85,19 @@ class BiometricService {
     return prefs.getString(_keyEmail);
   }
 
-  static Future<void> saveRefreshToken(String refreshToken) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyRefreshToken, refreshToken);
-  }
+  /// Stores the JWT refresh token in flutter_secure_storage (Android Keystore / iOS Keychain).
+  static Future<void> saveRefreshToken(String refreshToken) =>
+      SecureStorageService.saveTokens(refreshToken: refreshToken, accessToken: '');
 
-  static Future<String?> getSavedRefreshToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyRefreshToken);
-  }
+  /// Retrieves the JWT refresh token from secure storage.
+  static Future<String?> getSavedRefreshToken() =>
+      SecureStorageService.getRefreshToken();
 
   /// Clear all stored biometric preferences (called on logout).
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyEnabled);
     await prefs.remove(_keyEmail);
-    await prefs.remove(_keyRefreshToken);
+    await SecureStorageService.clearTokens();
   }
 }

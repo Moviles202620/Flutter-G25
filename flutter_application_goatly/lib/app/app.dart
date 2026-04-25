@@ -12,7 +12,12 @@ class GoatlyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AppState()),
+        ChangeNotifierProvider(create: (_) {
+          final state = AppState();
+          // Wire up connectivity stream as soon as the provider is created.
+          state.initConnectivity();
+          return state;
+        }),
         ChangeNotifierProvider(create: (_) => SettingsState()),
       ],
       child: Consumer<SettingsState>(

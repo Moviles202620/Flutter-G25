@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -14,6 +13,7 @@ import '../models/offer_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
+import '../services/sync_service.dart';
 
 class AppState extends ChangeNotifier {
   UserModel? _user;
@@ -42,6 +42,7 @@ class AppState extends ChangeNotifier {
         _isOnline = true;
         notifyListeners();
         loadStaffWorkspace();
+        unawaited(SyncService.flushPendingOperations());
       } else if (!online && _isOnline) {
         _isOnline = false;
         notifyListeners();
@@ -53,6 +54,9 @@ class AppState extends ChangeNotifier {
     _connectivitySub?.cancel();
     _connectivitySub = null;
   }
+
+  /// Bridge called by app.dart on provider creation to start connectivity monitoring.
+  void initConnectivity() => startConnectivityMonitoring();
 
   Future<void> _persistToCache() async {
     final prefs = await SharedPreferences.getInstance();
