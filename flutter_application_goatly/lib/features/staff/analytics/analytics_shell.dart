@@ -8,6 +8,7 @@ import 'acceptance_rate_page.dart';
 import 'gpa_dashboard_page.dart';
 import 'insights_page.dart';
 import 'top_applicants_page.dart';
+import 'gpa_high_rate_page.dart';
 
 class AnalyticsShell extends StatefulWidget {
   const AnalyticsShell({super.key});
@@ -23,7 +24,7 @@ class _AnalyticsShellState extends State<AnalyticsShell>
   @override
   void initState() {
     super.initState();
-    _controller = TabController(length: 4, vsync: this);
+    _controller = TabController(length: 5, vsync: this);
     _controller.addListener(_handleTabChange);
   }
 
@@ -63,6 +64,10 @@ class _AnalyticsShellState extends State<AnalyticsShell>
       _AnalyticsTabMeta(
         label: context.t('top_applicants'),
         icon: Icons.emoji_events_outlined,
+      ),
+      _AnalyticsTabMeta(
+        label: context.t('gpa_high_rate'),
+        icon: Icons.workspace_premium_outlined,
       ),
     ];
 
@@ -135,6 +140,7 @@ class _AnalyticsShellState extends State<AnalyticsShell>
                 InsightsPage(),
                 GpaDashboardPage(),
                 TopApplicantsPage(),
+                GpaHighRatePage(),
               ],
             ),
           ),

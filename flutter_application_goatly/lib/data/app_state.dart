@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/application_model.dart';
 import '../models/auth_session_model.dart';
@@ -20,6 +24,66 @@ class AppState extends ChangeNotifier {
   final List<OfferModel> _offers = [];
   final List<ApplicationModel> _applications = [];
   final List<AppNotification> _notifications = [];
+
+  // ── Connectivity & cache ───────────────────────────────────────────────────
+  bool _isOnline = true;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+
+  bool get isOnline => _isOnline;
+
+  static const _kOffersKey = 'cached_offers';
+  static const _kApplicationsKey = 'cached_applications';
+
+  void startConnectivityMonitoring() {
+    _connectivitySub?.cancel();
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final online = results.any((r) => r != ConnectivityResult.none);
+      if (online && !_isOnline) {
+        _isOnline = true;
+        notifyListeners();
+        loadStaffWorkspace();
+      } else if (!online && _isOnline) {
+        _isOnline = false;
+        notifyListeners();
+      }
+    });
+  }
+
+  void stopConnectivityMonitoring() {
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
+  }
+
+  Future<void> _persistToCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _kOffersKey,
+      jsonEncode(_offers.map((o) => o.toJson()).toList()),
+    );
+    await prefs.setString(
+      _kApplicationsKey,
+      jsonEncode(_applications.map((a) => a.toJson()).toList()),
+    );
+  }
+
+  Future<void> _loadFromCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final offersJson = prefs.getString(_kOffersKey);
+    final appsJson = prefs.getString(_kApplicationsKey);
+    if (offersJson != null) {
+      final list = jsonDecode(offersJson) as List<dynamic>;
+      _offers
+        ..clear()
+        ..addAll(list.map((e) => OfferModel.fromJson(e as Map<String, dynamic>)));
+    }
+    if (appsJson != null) {
+      final list = jsonDecode(appsJson) as List<dynamic>;
+      _applications
+        ..clear()
+        ..addAll(list.map((e) => ApplicationModel.fromJson(e as Map<String, dynamic>)));
+    }
+    if (offersJson != null || appsJson != null) notifyListeners();
+  }
 
   UserModel? get user => _user;
   String? get authToken => _authToken;
@@ -246,8 +310,12 @@ class AppState extends ChangeNotifier {
     final token = _authToken;
     if (token == null) return;
 
+    // Cache-first: render immediately from disk, then refresh from network.
+    await _loadFromCache();
+
     try {
       final myOffers = await ApiService.getMyOffers(token);
+      // Parallel fetch: all offer applications concurrently (multi-threading via Future.wait).
       final applicationsByOffer = await Future.wait(
         myOffers.map((offer) => ApiService.getStaffApplicationsByOffer(offer.id, token)),
       );
@@ -261,8 +329,9 @@ class AppState extends ChangeNotifier {
         ..addAll(applicationsByOffer.expand((applications) => applications));
 
       notifyListeners();
+      unawaited(_persistToCache()); // fire-and-forget background cache write
     } on ApiException {
-      // Keep the previous local state if the backend is unavailable.
+      // Network unavailable — cached data already shown, keep it.
     }
   }
 

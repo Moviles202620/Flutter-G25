@@ -449,6 +449,23 @@ class ApiService {
         .map((e) => TopApplicantModel.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  // ── BQ9 (David Hernandez) ─ GPA High Rate per Offer ───────────────────
+
+  /// GET /analytics/gpa-high-rate
+  /// BQ9: Percentage of applicants with GPA >= 4.0 per offer.
+  static Future<List<Map<String, dynamic>>> getGpaHighRate() async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/analytics/gpa-high-rate'), headers: _headers)
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener GPA high rate (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list.cast<Map<String, dynamic>>();
+  }
 }
 
 class ApiException implements Exception {
