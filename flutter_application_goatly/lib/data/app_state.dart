@@ -151,7 +151,7 @@ class AppState extends ChangeNotifier {
       if (session.user.role != 'staff') return false;
       await _applySession(session);
       return true;
-    } on ApiException {
+    } catch (_) {
       return false;
     }
   }
@@ -170,7 +170,7 @@ class AppState extends ChangeNotifier {
       );
       await _applySession(session);
       return true;
-    } on ApiException {
+    } catch (_) {
       return false;
     }
   }
