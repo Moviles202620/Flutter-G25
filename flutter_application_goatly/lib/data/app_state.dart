@@ -151,6 +151,8 @@ class AppState extends ChangeNotifier {
       if (session.user.role != 'staff') return false;
       await _applySession(session);
       return true;
+    } on NetworkException {
+      rethrow;
     } catch (_) {
       return false;
     }

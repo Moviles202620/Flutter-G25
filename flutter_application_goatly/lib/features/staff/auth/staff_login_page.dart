@@ -7,7 +7,7 @@ import '../../../app/routes.dart';
 import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
 import '../../../data/settings_state.dart';
-import '../../../services/api_service.dart';
+import '../../../services/api_service.dart' show ApiService, NetworkException;
 import '../../../services/biometric_service.dart';
 
 class StaffLoginPage extends StatefulWidget {
@@ -65,7 +65,14 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
     setState(() => _loading = true);
 
     final appState = context.read<AppState>();
-    final ok = await appState.login(email: email, password: password);
+    bool ok;
+    try {
+      ok = await appState.login(email: email, password: password);
+    } on NetworkException {
+      if (mounted) setState(() => _loading = false);
+      _showError('No se puede conectar al servidor. Verifica tu red.');
+      return;
+    }
 
     if (mounted) {
       setState(() => _loading = false);

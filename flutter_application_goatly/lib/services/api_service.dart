@@ -20,7 +20,7 @@ import '../models/applications_per_semester_model.dart';
 class ApiService {
   // Web → localhost | Physical device → LAN IP | Android emulator → 10.0.2.2
   static String get baseUrl =>
-      kIsWeb ? 'http://localhost:8000' : 'http://192.168.20.30:8000';
+      kIsWeb ? 'http://localhost:8000' : 'http://157.253.163.92:8000';
 
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',
@@ -28,26 +28,32 @@ class ApiService {
   };
 
   static Future<AuthSessionModel> login(String email, String password) async {
-    final res = await http
-        .post(
-          Uri.parse('$baseUrl/auth/login'),
-          headers: _headers,
-          body: jsonEncode({
-            'email': email.trim().toLowerCase(),
-            'password': password,
-          }),
-        )
-        .timeout(const Duration(seconds: 10));
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$baseUrl/auth/login'),
+            headers: _headers,
+            body: jsonEncode({
+              'email': email.trim().toLowerCase(),
+              'password': password,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
-    if (res.statusCode != 200) {
-      throw ApiException(
-        'Error al iniciar sesion (${res.statusCode}): ${res.body}',
+      if (res.statusCode != 200) {
+        throw ApiException(
+          'Error al iniciar sesion (${res.statusCode}): ${res.body}',
+        );
+      }
+
+      return AuthSessionModel.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>,
       );
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw const NetworkException();
     }
-
-    return AuthSessionModel.fromJson(
-      jsonDecode(res.body) as Map<String, dynamic>,
-    );
   }
 
   static Future<String> refreshAccessToken(String refreshToken) async {
@@ -507,4 +513,8 @@ class ApiException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class NetworkException implements Exception {
+  const NetworkException();
 }
