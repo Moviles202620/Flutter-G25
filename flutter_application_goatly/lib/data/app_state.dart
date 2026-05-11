@@ -189,7 +189,7 @@ class AppState extends ChangeNotifier {
     _applications.clear();
     _notifications.clear();
     notifyListeners();
-    await loadStaffWorkspace();
+    unawaited(loadStaffWorkspace());
   }
 
   void logout() {
