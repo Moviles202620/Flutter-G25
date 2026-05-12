@@ -7,6 +7,7 @@ import '../../../data/settings_state.dart';
 import '../../../models/applications_per_semester_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/cache_service.dart';
+import '../../../services/hive_cache_service.dart';
 
 class ApplicationsPerSemesterPage extends StatefulWidget {
   const ApplicationsPerSemesterPage({super.key});
@@ -34,16 +35,28 @@ class _ApplicationsPerSemesterPageState
   // ── Cache-first load ───────────────────────────────────────────────────────
 
   Future<void> _loadWithCache() async {
-    final cached = await CacheService.loadAnalytics(_endpoint);
-    final ts = await CacheService.getAnalyticsTimestamp(_endpoint);
-    if (cached != null) {
-      final list = (cached['data'] as List)
+    // Tier 2: Hive (fast disk, synchronous after init)
+    final hiveData = HiveCacheService.loadAnalytics(_endpoint);
+    final hiveTs = HiveCacheService.getTimestamp(_endpoint);
+    if (hiveData != null) {
+      final list = (hiveData['data'] as List)
           .map((e) => ApplicationsPerSemesterModel.fromJson(
               e as Map<String, dynamic>))
           .toList();
-      if (mounted) setState(() { _items = list; _lastUpdated = ts; });
+      if (mounted) setState(() { _items = list; _lastUpdated = hiveTs; });
     } else {
-      if (mounted) setState(() => _loading = true);
+      // Tier 3: SharedPreferences via CacheService (LRU + disk)
+      final cached = await CacheService.loadAnalytics(_endpoint);
+      final ts = await CacheService.getAnalyticsTimestamp(_endpoint);
+      if (cached != null) {
+        final list = (cached['data'] as List)
+            .map((e) => ApplicationsPerSemesterModel.fromJson(
+                e as Map<String, dynamic>))
+            .toList();
+        if (mounted) setState(() { _items = list; _lastUpdated = ts; });
+      } else {
+        if (mounted) setState(() => _loading = true);
+      }
     }
     await _refreshFromNetwork();
   }
@@ -64,6 +77,7 @@ class _ApplicationsPerSemesterPageState
                 })
             .toList(),
       };
+      await HiveCacheService.saveAnalytics(_endpoint, payload);
       await CacheService.saveAnalytics(_endpoint, payload);
       final ts = await CacheService.getAnalyticsTimestamp(_endpoint);
       if (mounted) {

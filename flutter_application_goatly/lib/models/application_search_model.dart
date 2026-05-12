@@ -38,6 +38,19 @@ class ApplicationSearchModel {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'offer_id': offerId,
+        'offer_title': offerTitle,
+        'applicant_name': applicantName,
+        'career': career,
+        'semester': semester,
+        'gpa': gpa,
+        'availability': availability,
+        'status': status,
+        'created_at': createdAt.toIso8601String(),
+      };
+
   String get initials {
     final parts = applicantName.trim().split(' ');
     if (parts.length >= 2) {

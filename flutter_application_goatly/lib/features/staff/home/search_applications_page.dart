@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../app/localization.dart';
@@ -5,6 +6,7 @@ import '../../../app/theme.dart';
 import '../../../data/settings_state.dart';
 import '../../../models/application_search_model.dart';
 import '../../../services/api_service.dart';
+import '../../../services/search_history_db.dart';
 
 class SearchApplicationsPage extends StatefulWidget {
   const SearchApplicationsPage({super.key});
@@ -17,9 +19,16 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
   final TextEditingController _queryCtrl = TextEditingController();
   int? _semesterFilter;
   List<ApplicationSearchModel>? _results;
+  List<Map<String, dynamic>> _recentSearches = [];
   bool _loading = false;
   String? _error;
   bool _searched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initHistory();
+  }
 
   @override
   void dispose() {
@@ -27,32 +36,61 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
     super.dispose();
   }
 
+  Future<void> _initHistory() async {
+    await SearchHistoryDb.pruneOld();
+    final recents = await SearchHistoryDb.getRecentSearches();
+    if (mounted) setState(() => _recentSearches = recents);
+  }
+
   Future<void> _search() async {
     final q = _queryCtrl.text.trim();
-    setState(() {
-      _loading = true;
-      _error = null;
-      _searched = true;
-    });
+    setState(() { _loading = true; _error = null; _searched = true; });
+
+    // Check SQLite cache first (works offline)
+    final cached = await SearchHistoryDb.findCachedQuery(q);
+    if (cached != null && mounted) {
+      final list = (jsonDecode(cached['results'] as String) as List)
+          .map((e) => ApplicationSearchModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      setState(() { _results = list; _loading = false; });
+    }
+
+    // Always try network refresh in background
     try {
       final results = await ApiService.searchApplications(
         q: q.isEmpty ? null : q,
         semester: _semesterFilter,
       );
+      final json = jsonEncode(results.map((r) => r.toJson()).toList());
+      await SearchHistoryDb.saveSearch(q, json);
+      final recents = await SearchHistoryDb.getRecentSearches();
       if (mounted) {
         setState(() {
           _results = results;
           _loading = false;
+          _recentSearches = recents;
         });
       }
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message;
           _loading = false;
+          if (_results == null) _error = e.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          if (_results == null) _error = 'Sin conexión';
         });
       }
     }
+  }
+
+  void _fillAndSearch(String query) {
+    _queryCtrl.text = query;
+    _search();
   }
 
   @override
@@ -167,8 +205,7 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
 
           // Results
           Expanded(
-            child: _buildBody(
-              context, isDark, surfaceColor, borderColor),
+            child: _buildBody(context, isDark, surfaceColor, borderColor),
           ),
         ],
       ),
@@ -190,7 +227,7 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
       );
     }
 
-    if (_error != null) {
+    if (_error != null && _results == null) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -214,23 +251,98 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
     }
 
     if (!_searched) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.search,
-                size: 64,
-                color: isDark ? AppColors.darkGreyText : AppColors.greyText),
-            const SizedBox(height: 12),
-            Text(
-              context.t('search_empty_hint'),
-              style: TextStyle(
-                color: isDark ? AppColors.darkGreyText : AppColors.greyText,
-                fontSize: 16,
-              ),
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+        children: [
+          // Empty-state hint
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.search,
+                    size: 64,
+                    color: isDark
+                        ? AppColors.darkGreyText
+                        : AppColors.greyText),
+                const SizedBox(height: 12),
+                Text(
+                  context.t('search_empty_hint'),
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkGreyText
+                        : AppColors.greyText,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Recent searches (SQLite)
+          if (_recentSearches.isNotEmpty) ...[
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                const Icon(Icons.history,
+                    size: 16, color: AppColors.greyText),
+                const SizedBox(width: 6),
+                Text(
+                  'Búsquedas recientes',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? AppColors.darkGreyText
+                        : AppColors.greyText,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _recentSearches.map((row) {
+                final query = row['query'] as String;
+                return GestureDetector(
+                  onTap: () => _fillAndSearch(query),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppColors.darkSurface
+                          : AppColors.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.history,
+                            size: 14, color: AppColors.greyText),
+                        const SizedBox(width: 6),
+                        Text(
+                          query.isEmpty ? '(todos)' : query,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? AppColors.darkGreyText
+                                : AppColors.greyText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
           ],
-        ),
+        ],
       );
     }
 
@@ -286,9 +398,7 @@ class _SemChip extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected
-              ? AppColors.primaryYellow
-              : Colors.transparent,
+          color: selected ? AppColors.primaryYellow : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
@@ -362,7 +472,8 @@ class _SearchResultCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.primaryYellow.withValues(alpha: 0.15),
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primaryYellow.withValues(alpha: 0.35)),
+              border: Border.all(
+                  color: AppColors.primaryYellow.withValues(alpha: 0.35)),
             ),
             child: Center(
               child: Text(
