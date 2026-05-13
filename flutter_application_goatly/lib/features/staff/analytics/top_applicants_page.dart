@@ -7,6 +7,7 @@ import '../../../data/settings_state.dart';
 import '../../../models/top_applicant_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/cache_service.dart';
+import '../../../services/hive_cache_service.dart';
 
 class TopApplicantsPage extends StatefulWidget {
   const TopApplicantsPage({super.key});
@@ -32,15 +33,26 @@ class _TopApplicantsPageState extends State<TopApplicantsPage> {
   // ── Cache-first load ───────────────────────────────────────────────────────
 
   Future<void> _loadWithCache() async {
-    final cached = await CacheService.loadAnalytics(_endpoint);
-    final ts = await CacheService.getAnalyticsTimestamp(_endpoint);
-    if (cached != null) {
-      final list = (cached['data'] as List)
+    // Tier 2: Hive (fast disk, synchronous after init)
+    final hiveData = HiveCacheService.loadAnalytics(_endpoint);
+    final hiveTs = HiveCacheService.getTimestamp(_endpoint);
+    if (hiveData != null) {
+      final list = (hiveData['data'] as List)
           .map((e) => TopApplicantModel.fromJson(e as Map<String, dynamic>))
           .toList();
-      if (mounted) setState(() { _items = list; _lastUpdated = ts; });
+      if (mounted) setState(() { _items = list; _lastUpdated = hiveTs; });
     } else {
-      if (mounted) setState(() => _loading = true);
+      // Tier 3: SharedPreferences via CacheService (LRU + disk)
+      final cached = await CacheService.loadAnalytics(_endpoint);
+      final ts = await CacheService.getAnalyticsTimestamp(_endpoint);
+      if (cached != null) {
+        final list = (cached['data'] as List)
+            .map((e) => TopApplicantModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        if (mounted) setState(() { _items = list; _lastUpdated = ts; });
+      } else {
+        if (mounted) setState(() => _loading = true);
+      }
     }
     await _refreshFromNetwork();
   }
@@ -52,6 +64,7 @@ class _TopApplicantsPageState extends State<TopApplicantsPage> {
       // event loop de Dart sin bloquear el UI thread (async I/O concurrente).
       final fresh = await ApiService.getTopApplicants();
       final payload = {'data': fresh.map((e) => e.toJson()).toList()};
+      await HiveCacheService.saveAnalytics(_endpoint, payload);
       await CacheService.saveAnalytics(_endpoint, payload);
       final ts = await CacheService.getAnalyticsTimestamp(_endpoint);
       if (mounted) setState(() { _items = fresh; _lastUpdated = ts; _loading = false; });
