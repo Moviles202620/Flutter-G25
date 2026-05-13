@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import '../models/auth_session_model.dart';
 import '../models/offer_model.dart';
@@ -18,9 +17,8 @@ import '../models/applications_per_semester_model.dart';
 /// Android emulator: baseUrl = 'http://10.0.2.2:8000'
 /// Physical device : baseUrl = 'http://YOUR_PC_LAN_IP:8000'
 class ApiService {
-  // Web → localhost | Physical device → LAN IP | Android emulator → 10.0.2.2
-  static String get baseUrl =>
-      kIsWeb ? 'http://localhost:8000' : 'http://157.253.163.92:8000';
+  // Web, Android (via adb reverse) → localhost | Android emulator → 10.0.2.2
+  static String get baseUrl => 'http://localhost:8000';
 
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',
