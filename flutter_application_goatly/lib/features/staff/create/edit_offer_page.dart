@@ -203,9 +203,12 @@ class _EditOfferPageState extends State<EditOfferPage> {
         ),
       );
       Navigator.pop(context);
-    } on ApiException catch (error) {
+    } catch (error) {
       if (!mounted) return;
-      _showError(error.message);
+      final msg = error is ApiException
+          ? error.message
+          : 'Sin conexión — los cambios no se pudieron guardar';
+      _showError(msg);
     } finally {
       if (mounted) setState(() => _saving = false);
     }

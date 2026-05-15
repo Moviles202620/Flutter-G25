@@ -1,9 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // compute() — runs in background isolate
 import 'package:provider/provider.dart';
 import '../../../app/localization.dart';
 import '../../../app/theme.dart';
 import '../../../data/settings_state.dart';
 import '../../../services/api_service.dart';
+import '../../../services/cache_service.dart';
+import '../../../services/connectivity_service.dart';
+
+// Must be a top-level function so compute() can send it to a background isolate.
+List<Map<String, dynamic>> _sortByHighGpaPct(List<Map<String, dynamic>> rows) {
+  final sorted = List<Map<String, dynamic>>.from(rows);
+  sorted.sort((a, b) {
+    final pA = (a['high_gpa_percentage'] as num?)?.toDouble() ?? 0.0;
+    final pB = (b['high_gpa_percentage'] as num?)?.toDouble() ?? 0.0;
+    return pB.compareTo(pA); // highest percentage first
+  });
+  return sorted;
+}
 
 class GpaHighRatePage extends StatefulWidget {
   const GpaHighRatePage({super.key});
@@ -13,17 +27,47 @@ class GpaHighRatePage extends StatefulWidget {
 }
 
 class _GpaHighRatePageState extends State<GpaHighRatePage> {
+  static const _cacheKey = 'gpa_high_rate';
   late Future<List<Map<String, dynamic>>> _future;
 
   @override
   void initState() {
     super.initState();
-    _future = ApiService.getGpaHighRate();
+    _future = _load();
+  }
+
+  /// Stale-while-revalidate + Isolate (compute):
+  /// 1. Load from LRU/disk cache immediately — fast, offline-safe.
+  /// 2. If online, fetch fresh data from /analytics/gpa-high-rate.
+  /// 3. Sort result in a background isolate via compute() to avoid UI jank.
+  /// 4. Persist to cache so the next offline session has data.
+  Future<List<Map<String, dynamic>>> _load() async {
+    final cached = await CacheService.loadAnalytics(_cacheKey);
+
+    if (!ConnectivityService.isOnline) {
+      if (cached != null) {
+        return (cached['data'] as List<dynamic>).cast<Map<String, dynamic>>();
+      }
+      throw const NetworkException();
+    }
+
+    try {
+      final fresh = await ApiService.getGpaHighRate();
+      // compute() spawns a background isolate — keeps the main/UI thread free.
+      final sorted = await compute(_sortByHighGpaPct, fresh);
+      await CacheService.saveAnalytics(_cacheKey, {'data': sorted});
+      return sorted;
+    } catch (_) {
+      if (cached != null) {
+        return (cached['data'] as List<dynamic>).cast<Map<String, dynamic>>();
+      }
+      rethrow;
+    }
   }
 
   void _reload() {
     setState(() {
-      _future = ApiService.getGpaHighRate();
+      _future = _load();
     });
   }
 
@@ -49,15 +93,24 @@ class _GpaHighRatePageState extends State<GpaHighRatePage> {
         }
 
         if (snapshot.hasError) {
+          final isNetwork =
+              snapshot.error is NetworkException || !ConnectivityService.isOnline;
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.error_outline,
-                    size: 48,
-                    color: isDark ? AppColors.darkGreyText : AppColors.greyText),
+                Icon(
+                  isNetwork ? Icons.wifi_off_rounded : Icons.error_outline,
+                  size: 48,
+                  color: isDark ? AppColors.darkGreyText : AppColors.greyText,
+                ),
                 const SizedBox(height: 12),
-                Text(context.t('error_loading')),
+                Text(
+                  isNetwork
+                      ? context.t('no_cache_offline')
+                      : context.t('error_loading'),
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: _reload,
@@ -119,7 +172,6 @@ class _GpaHighRateCard extends StatelessWidget {
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
     final greyText = isDark ? AppColors.darkGreyText : AppColors.greyText;
 
-    // Color the bar: green when high, amber when medium, red when low
     final barColor = pct >= 60
         ? AppColors.success
         : pct >= 30

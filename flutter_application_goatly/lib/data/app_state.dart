@@ -41,8 +41,9 @@ class AppState extends ChangeNotifier {
       if (online && !_isOnline) {
         _isOnline = true;
         notifyListeners();
-        loadStaffWorkspace();
-        unawaited(SyncService.flushPendingOperations());
+        // Flush pending ops first so offline-created offers reach the backend
+        // before loadStaffWorkspace() replaces the local list with server data.
+        unawaited(SyncService.flushPendingOperations().then((_) => loadStaffWorkspace()));
       } else if (!online && _isOnline) {
         _isOnline = false;
         notifyListeners();
@@ -336,8 +337,9 @@ class AppState extends ChangeNotifier {
 
       notifyListeners();
       unawaited(_persistToCache()); // fire-and-forget background cache write
-    } on ApiException {
-      // Network unavailable — cached data already shown, keep it.
+    } catch (_) {
+      // Any network error (SocketException, TimeoutException, ApiException):
+      // cached data is already rendered — just keep it, no action needed.
     }
   }
 
@@ -352,14 +354,15 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       }
       return true;
-    } on ApiException {
-      return false;
+    } catch (_) {
+      return false; // Network or API error — graceful failure
     }
   }
 
   void addOffer(OfferModel offer) {
     _offers.insert(0, offer);
     notifyListeners();
+    unawaited(_persistToCache()); // persist immediately so offline offers survive cache reload
   }
 
   void updateOffer(OfferModel updated) {
@@ -488,8 +491,8 @@ class AppState extends ChangeNotifier {
           quality: quality,
           attitude: attitude,
         );
-      } on ApiException {
-        return false; // Backend sync failed — do not mutate local state
+      } catch (_) {
+        return false; // Network or API error — do not mutate local state
       }
     }
 
