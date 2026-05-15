@@ -7,6 +7,7 @@ import '../../../app/theme.dart';
 import '../../../data/app_state.dart';
 import '../../../models/offer_model.dart';
 import '../../../services/api_service.dart';
+import '../../../services/cache_service.dart';
 import '../../../services/notification_service.dart';
 import '../../../utils/offer_form_utils.dart';
 
@@ -159,6 +160,17 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
       appState.addOffer(savedOffer);
       NotificationService.onOfferPublished(savedOffer.title);
       appState.onOfferPublished(savedOffer);
+
+      // When offline, queue the creation for background sync on reconnect.
+      if (apiError != null && token != null) {
+        await CacheService.enqueuePendingOp({
+          'id': 'offline_offer_${savedOffer.id}',
+          'method': 'POST',
+          'endpoint': '/offers',
+          'token': token,
+          'body': savedOffer.toJson(),
+        });
+      }
     }
 
     if (!mounted) return;

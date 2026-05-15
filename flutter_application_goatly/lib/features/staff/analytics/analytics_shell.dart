@@ -41,6 +41,7 @@ class _AnalyticsShellState extends State<AnalyticsShell>
         ApiService.getGpaByOffer(),
         ApiService.getTopApplicants(),
         ApiService.getApplicationsPerSemester(),
+        ApiService.getGpaHighRate(), // BQ9 — warm LRU cache alongside team's BQs
       ]);
     } catch (_) {
       // Errors handled individually by each page's own cache-first logic.

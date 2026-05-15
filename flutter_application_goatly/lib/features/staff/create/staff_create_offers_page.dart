@@ -308,11 +308,14 @@ class _OfferCard extends StatelessWidget {
           ),
         );
       }
-    } on ApiException catch (e) {
+    } catch (e) {
       if (context.mounted) {
+        final msg = e is ApiException
+            ? e.message
+            : 'Sin conexión — no se pudo eliminar la oferta';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message),
+            content: Text(msg),
             backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
           ),

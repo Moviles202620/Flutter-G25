@@ -87,8 +87,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
           'language': settings.language,
           'is_dark_mode': settings.isDarkMode,
         });
-      } on ApiException {
-        // Backend sync failed, local update still applied
+      } catch (_) {
+        // Network or API error — local update already applied, backend will sync later
       }
     }
 

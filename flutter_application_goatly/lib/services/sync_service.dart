@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'api_service.dart';
 import 'cache_service.dart';
 
 /// Processes the offline write queue (pending_operations in SharedPreferences).
@@ -10,10 +11,13 @@ import 'cache_service.dart';
 ///
 /// Called by AppState when ConnectivityService reports a transition to online.
 class SyncService {
-  static const String _baseUrl = 'http://10.0.2.2:8000';
-  static const Map<String, String> _headers = {
+  // Mirrors ApiService.baseUrl so endpoint changes only need one edit.
+  static String get _baseUrl => ApiService.baseUrl;
+
+  static Map<String, String> _buildHeaders({String? token}) => {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    if (token != null) 'Authorization': 'Bearer $token',
   };
 
   /// Drains the pending-operations queue FIFO.
@@ -28,6 +32,8 @@ class SyncService {
         final method = (op['method'] as String).toUpperCase();
         final endpoint = op['endpoint'] as String;
         final body = op['body'] as Map<String, dynamic>?;
+        final token = op['token'] as String?;
+        final headers = _buildHeaders(token: token);
 
         final uri = Uri.parse('$_baseUrl$endpoint');
         http.Response? res;
@@ -35,18 +41,18 @@ class SyncService {
         switch (method) {
           case 'POST':
             res = await http
-                .post(uri, headers: _headers, body: body != null ? jsonEncode(body) : null)
+                .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
                 .timeout(const Duration(seconds: 10));
           case 'PATCH':
             res = await http
-                .patch(uri, headers: _headers, body: body != null ? jsonEncode(body) : null)
+                .patch(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
                 .timeout(const Duration(seconds: 10));
           case 'PUT':
             res = await http
-                .put(uri, headers: _headers, body: body != null ? jsonEncode(body) : null)
+                .put(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
                 .timeout(const Duration(seconds: 10));
           case 'DELETE':
-            res = await http.delete(uri, headers: _headers).timeout(const Duration(seconds: 10));
+            res = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
         }
 
         if (res != null && res.statusCode >= 200 && res.statusCode < 300) {
