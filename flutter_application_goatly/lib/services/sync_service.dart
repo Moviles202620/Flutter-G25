@@ -22,7 +22,9 @@ class SyncService {
 
   /// Drains the pending-operations queue FIFO.
   /// Successful operations are removed; failed ones remain for the next sync.
-  static Future<void> flushPendingOperations() async {
+  /// [currentToken] — the caller's live access token; preferred over the
+  /// stale token stored in each op (which may have expired in the meantime).
+  static Future<void> flushPendingOperations({String? currentToken}) async {
     final ops = await CacheService.loadPendingOps();
     if (ops.isEmpty) return;
 
@@ -32,7 +34,7 @@ class SyncService {
         final method = (op['method'] as String).toUpperCase();
         final endpoint = op['endpoint'] as String;
         final body = op['body'] as Map<String, dynamic>?;
-        final token = op['token'] as String?;
+        final token = currentToken ?? (op['token'] as String?);
         final headers = _buildHeaders(token: token);
 
         final uri = Uri.parse('$_baseUrl$endpoint');

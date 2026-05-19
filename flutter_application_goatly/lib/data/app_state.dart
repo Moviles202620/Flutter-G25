@@ -12,6 +12,7 @@ import '../models/notification_model.dart';
 import '../models/offer_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
+import '../services/cache_service.dart';
 import '../services/notification_service.dart';
 import '../services/sync_service.dart';
 
@@ -41,9 +42,9 @@ class AppState extends ChangeNotifier {
       if (online && !_isOnline) {
         _isOnline = true;
         notifyListeners();
-        // Flush pending ops first so offline-created offers reach the backend
-        // before loadStaffWorkspace() replaces the local list with server data.
-        unawaited(SyncService.flushPendingOperations().then((_) => loadStaffWorkspace()));
+        // Flush with the current (live) token so expired stored tokens don't
+        // block the sync, then reload the workspace once flush completes.
+        unawaited(SyncService.flushPendingOperations(currentToken: _authToken).then((_) => loadStaffWorkspace()));
       } else if (!online && _isOnline) {
         _isOnline = false;
         notifyListeners();
@@ -72,22 +73,26 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _loadFromCache() async {
-    final prefs = await SharedPreferences.getInstance();
-    final offersJson = prefs.getString(_kOffersKey);
-    final appsJson = prefs.getString(_kApplicationsKey);
-    if (offersJson != null) {
-      final list = jsonDecode(offersJson) as List<dynamic>;
-      _offers
-        ..clear()
-        ..addAll(list.map((e) => OfferModel.fromJson(e as Map<String, dynamic>)));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final offersJson = prefs.getString(_kOffersKey);
+      final appsJson = prefs.getString(_kApplicationsKey);
+      if (offersJson != null) {
+        final list = jsonDecode(offersJson) as List<dynamic>;
+        _offers
+          ..clear()
+          ..addAll(list.map((e) => OfferModel.fromJson(e as Map<String, dynamic>)));
+      }
+      if (appsJson != null) {
+        final list = jsonDecode(appsJson) as List<dynamic>;
+        _applications
+          ..clear()
+          ..addAll(list.map((e) => ApplicationModel.fromJson(e as Map<String, dynamic>)));
+      }
+      if (offersJson != null || appsJson != null) notifyListeners();
+    } catch (_) {
+      // Cache corrupted — ignore and let network refresh rebuild it
     }
-    if (appsJson != null) {
-      final list = jsonDecode(appsJson) as List<dynamic>;
-      _applications
-        ..clear()
-        ..addAll(list.map((e) => ApplicationModel.fromJson(e as Map<String, dynamic>)));
-    }
-    if (offersJson != null || appsJson != null) notifyListeners();
   }
 
   UserModel? get user => _user;
@@ -320,6 +325,10 @@ class AppState extends ChangeNotifier {
     // Cache-first: render immediately from disk, then refresh from network.
     await _loadFromCache();
 
+    // Always surface locally-queued offers so they stay visible even when
+    // the cache was overwritten by a previous empty server response.
+    final queued = await _pendingLocalOffers();
+
     try {
       final myOffers = await ApiService.getMyOffers(token);
       // Parallel fetch: all offer applications concurrently (multi-threading via Future.wait).
@@ -327,9 +336,12 @@ class AppState extends ChangeNotifier {
         myOffers.map((offer) => ApiService.getStaffApplicationsByOffer(offer.id, token)),
       );
 
+      final serverIds = myOffers.map((o) => o.id).toSet();
       _offers
         ..clear()
-        ..addAll(myOffers);
+        ..addAll(myOffers)
+        // Re-attach locally-queued offers not yet confirmed by the server
+        ..addAll(queued.where((o) => !serverIds.contains(o.id)));
 
       _applications
         ..clear()
@@ -338,9 +350,36 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       unawaited(_persistToCache()); // fire-and-forget background cache write
     } catch (_) {
-      // Any network error (SocketException, TimeoutException, ApiException):
-      // cached data is already rendered — just keep it, no action needed.
+      // Network error — cached data already rendered; also ensure queued
+      // offline offers appear even if the cache was previously emptied.
+      final cachedIds = _offers.map((o) => o.id).toSet();
+      final missing = queued.where((o) => !cachedIds.contains(o.id)).toList();
+      if (missing.isNotEmpty) {
+        _offers.addAll(missing);
+        notifyListeners();
+        unawaited(_persistToCache());
+      }
     }
+  }
+
+  /// Reconstructs OfferModel instances from the pending-ops queue.
+  /// Uses the extra metadata (local_id / local_created_at) stored at enqueue time.
+  Future<List<OfferModel>> _pendingLocalOffers() async {
+    final ops = await CacheService.loadPendingOps();
+    final result = <OfferModel>[];
+    for (final op in ops) {
+      if (op['method'] != 'POST' || op['endpoint'] != '/offers') continue;
+      try {
+        final body = Map<String, dynamic>.from(op['body'] as Map<String, dynamic>);
+        body['id'] = op['local_id'] as String;
+        body['created_at'] = op['local_created_at'] as String;
+        body['state'] = 'upcoming';
+        result.add(OfferModel.fromJson(body));
+      } catch (_) {
+        // Malformed op — skip it
+      }
+    }
+    return result;
   }
 
   Future<bool> closeOffer(String offerId) async {

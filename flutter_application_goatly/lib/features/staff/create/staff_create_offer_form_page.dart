@@ -169,6 +169,10 @@ class _StaffCreateOfferFormPageState extends State<StaffCreateOfferFormPage> {
           'endpoint': '/offers',
           'token': token,
           'body': savedOffer.toJson(),
+          // Extra metadata so AppState can reconstruct the OfferModel locally
+          // (toJson omits id/created_at since the backend generates them)
+          'local_id': savedOffer.id,
+          'local_created_at': savedOffer.createdAt.toIso8601String(),
         });
       }
     }

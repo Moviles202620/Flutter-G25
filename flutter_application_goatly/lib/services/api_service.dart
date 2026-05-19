@@ -12,13 +12,9 @@ import '../models/application_search_model.dart';
 import '../models/applications_per_semester_model.dart';
 
 /// Central HTTP client for the Goatly FastAPI backend.
-///
-/// Web/Chrome      : baseUrl = 'http://localhost:8000'
-/// Android emulator: baseUrl = 'http://10.0.2.2:8000'
-/// Physical device : baseUrl = 'http://YOUR_PC_LAN_IP:8000'
+/// Requires `adb reverse tcp:8000 tcp:8000` when running on a physical device.
 class ApiService {
-  // Web, Android (via adb reverse) → localhost | Android emulator → 10.0.2.2
-  static String get baseUrl => 'http://157.253.223.250:8000';
+  static String get baseUrl => 'http://localhost:8000';
 
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',
