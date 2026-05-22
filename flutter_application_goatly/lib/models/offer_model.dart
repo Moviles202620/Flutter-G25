@@ -16,6 +16,7 @@ class OfferModel {
   final bool closedEarly;
   final String state; // 'upcoming' | 'active' | 'closed' from backend
   final DateTime createdAt;
+  final String? imageUrl; // optional offer thumbnail for list display
 
   OfferModel({
     required this.id,
@@ -33,6 +34,7 @@ class OfferModel {
     this.closedEarly = false,
     this.state = 'upcoming',
     required this.createdAt,
+    this.imageUrl,
   });
 
   /// Parsed enum for use in switch expressions.
@@ -61,6 +63,7 @@ class OfferModel {
         closedEarly: j['closed_early'] as bool? ?? false,
         state: j['state'] as String? ?? 'upcoming',
         createdAt: DateTime.parse(j['created_at'] as String),
+        imageUrl: j['image_url'] as String?,
       );
 
   Map<String, dynamic> toJson() => {

@@ -474,6 +474,14 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'stat_total_rated': 'Calificados',
         'stat_avg_rating': 'Prom. Rating',
         'average': 'Promedio',
+        // ── BQ11 (Santiago Reyes) ─ Offer Lifecycle ──
+        'offer_lifecycle': 'Ciclo de Oferta',
+        'offer_lifecycle_title': 'Ciclo de vida de ofertas',
+        'offer_lifecycle_subtitle': 'Tiempo promedio que una oferta permanece abierta desde su publicación hasta su cierre',
+        'offer_lifecycle_avg_label': 'días promedio abierta',
+        'offer_lifecycle_min': 'Mín. días',
+        'offer_lifecycle_max': 'Máx. días',
+        'offer_lifecycle_total': 'Ofertas cerradas',
       },
       'en': {
         'settings': 'Settings',
@@ -843,6 +851,14 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'stat_total_rated': 'Rated',
         'stat_avg_rating': 'Avg. Rating',
         'average': 'Average',
+        // ── BQ11 (Santiago Reyes) ─ Offer Lifecycle ──
+        'offer_lifecycle': 'Offer Lifecycle',
+        'offer_lifecycle_title': 'Offer lifecycle',
+        'offer_lifecycle_subtitle': 'Average time an offer stays open from publication until it is closed',
+        'offer_lifecycle_avg_label': 'avg days open',
+        'offer_lifecycle_min': 'Min days',
+        'offer_lifecycle_max': 'Max days',
+        'offer_lifecycle_total': 'Closed offers',
       }
     };
 
