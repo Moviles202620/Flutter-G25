@@ -12,6 +12,7 @@ import 'gpa_dashboard_page.dart';
 import 'gpa_high_rate_page.dart';
 import 'insights_page.dart';
 import 'offer_lifecycle_screen.dart';
+import 'status_distribution_page.dart';
 import 'top_applicants_page.dart';
 
 class AnalyticsShell extends StatefulWidget {
@@ -28,7 +29,7 @@ class _AnalyticsShellState extends State<AnalyticsShell>
   @override
   void initState() {
     super.initState();
-    _controller = TabController(length: 7, vsync: this);
+    _controller = TabController(length: 8, vsync: this);
     _controller.addListener(_handleTabChange);
     // Multi-threading: Future.wait lanza ambas peticiones HTTP simultáneamente
     // sin bloquear el UI thread, reduciendo el tiempo total de carga.
@@ -44,8 +45,9 @@ class _AnalyticsShellState extends State<AnalyticsShell>
         ApiService.getGpaByOffer(),
         ApiService.getTopApplicants(),
         ApiService.getApplicationsPerSemester(),
-        ApiService.getGpaHighRate(),      // BQ9
-        ApiService.getOfferLifecycle(),   // BQ11 — warm LRU cache in parallel
+        ApiService.getGpaHighRate(),          // BQ9
+        ApiService.getStatusDistribution(),   // BQ13 — pre-warm cache on shell load
+        ApiService.getOfferLifecycle(),       // BQ11 — warm LRU cache in parallel
       ]);
     } catch (_) {
       // Errors handled individually by each page's own cache-first logic.
@@ -96,6 +98,10 @@ class _AnalyticsShellState extends State<AnalyticsShell>
       _AnalyticsTabMeta(
         label: context.t('apps_per_semester'),
         icon: Icons.bar_chart_rounded,
+      ),
+      _AnalyticsTabMeta(
+        label: context.t('status_distribution'),
+        icon: Icons.donut_large_outlined,
       ),
       _AnalyticsTabMeta(
         label: context.t('offer_lifecycle'),
@@ -174,6 +180,7 @@ class _AnalyticsShellState extends State<AnalyticsShell>
                 TopApplicantsPage(),
                 GpaHighRatePage(),
                 ApplicationsPerSemesterPage(),
+                StatusDistributionPage(),
                 OfferLifecycleScreen(),
               ],
             ),

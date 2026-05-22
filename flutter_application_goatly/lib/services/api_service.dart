@@ -481,6 +481,25 @@ class ApiService {
     return list.cast<Map<String, dynamic>>();
   }
 
+  // ── BQ13 (David Hernandez) ─ Status Distribution per Semester ────────────
+
+  /// GET /analytics/status-distribution[?semester=YYYY-N]
+  /// BQ13: Distribution of pending/accepted/rejected applications this semester.
+  /// Returns a Map with keys: semester, total_applications, distribution, per_offer.
+  static Future<Map<String, dynamic>> getStatusDistribution({String? semester}) async {
+    final uri = semester != null
+        ? Uri.parse('$baseUrl/analytics/status-distribution?semester=$semester')
+        : Uri.parse('$baseUrl/analytics/status-distribution');
+
+    final res = await http.get(uri, headers: _headers).timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener distribución de estados (${res.statusCode})');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   // ── BQ7 (Santiago Reyes) ─ Time to First Application ──────────────────
 
   /// GET /analytics/time-to-first-application
