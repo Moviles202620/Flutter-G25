@@ -184,6 +184,7 @@ class _ApplicantListPageState extends State<ApplicantListPage> {
                         offer: widget.offer,
                         surface: surface,
                         border: border,
+                        onRefresh: _loadApplicants,
                       ),
           ),
         ],
@@ -550,12 +551,14 @@ class _ApplicantList extends StatelessWidget {
   final OfferModel offer;
   final Color surface;
   final Color border;
+  final VoidCallback onRefresh;
 
   const _ApplicantList({
     required this.applicants,
     required this.offer,
     required this.surface,
     required this.border,
+    required this.onRefresh,
   });
 
   @override
@@ -571,12 +574,15 @@ class _ApplicantList extends StatelessWidget {
           rank: i + 1,
           surface: surface,
           border: border,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ApplicationDetailPage(app: app),
-            ),
-          ),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ApplicationDetailPage(app: app),
+              ),
+            );
+            onRefresh();
+          },
         );
       },
     );

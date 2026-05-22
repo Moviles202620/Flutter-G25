@@ -236,6 +236,13 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'high_gpa_pct': '% con GPA ≥ 4.0',
         'high_gpa_count': 'Con GPA ≥ 4.0',
         'no_high_gpa_data': 'No hay datos de GPA alto disponibles',
+        // ── BQ13 (David Hernandez) ─ Status Distribution ──
+        'status_distribution': 'Distribución de Estados',
+        'status_distribution_title': 'Distribución de Estados (Semestre)',
+        'status_distribution_subtitle': '¿Cómo se distribuyen las solicitudes entre pendiente, aceptada y rechazada este semestre?',
+        'per_offer_breakdown': 'Desglose por oferta',
+        'no_status_data': 'No hay datos de aplicaciones para este semestre',
+        'status_offline_banner': 'Sin conexión — mostrando datos guardados',
         // ── Form fields & hints ──
         'offer_details': 'Detalles de la oferta',
         'offer_subtitle': 'Completa los campos para publicar tu nueva solicitud.',
@@ -598,6 +605,13 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'high_gpa_pct': '% with GPA ≥ 4.0',
         'high_gpa_count': 'With GPA ≥ 4.0',
         'no_high_gpa_data': 'No high-GPA data available',
+        // ── BQ13 (David Hernandez) ─ Status Distribution ──
+        'status_distribution': 'Status Distribution',
+        'status_distribution_title': 'Status Distribution (Semester)',
+        'status_distribution_subtitle': 'How are applications distributed between pending, accepted, and rejected this semester?',
+        'per_offer_breakdown': 'Per-offer breakdown',
+        'no_status_data': 'No application data available for this semester',
+        'status_offline_banner': 'No connection — showing saved data',
         // ── Form fields & hints ──
         'offer_details': 'Offer Details',
         'offer_subtitle': 'Fill in the fields to publish your new request.',
