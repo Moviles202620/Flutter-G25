@@ -499,6 +499,25 @@ class ApiService {
     }
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
+
+  // ── BQ11 (Santiago Reyes) ─ Offer Lifecycle ────────────────────────────
+
+  /// GET /analytics/offer-lifecycle
+  /// BQ11: Average, min, max days an offer stays open + total closed offers.
+  static Future<Map<String, dynamic>> getOfferLifecycle() async {
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/analytics/offer-lifecycle'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener ciclo de vida de ofertas (${res.statusCode})');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
 }
 
 class ApiException implements Exception {
