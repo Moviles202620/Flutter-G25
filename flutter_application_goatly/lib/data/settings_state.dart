@@ -482,6 +482,13 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'offer_lifecycle_min': 'Mín. días',
         'offer_lifecycle_max': 'Máx. días',
         'offer_lifecycle_total': 'Ofertas cerradas',
+        // ── BQ17 (Guillermo Hernández) ─ Staff Activity Leaderboard ──
+        'staff_activity': 'Actividad Staff',
+        'staff_activity_title': 'Ranking de Staff Activo',
+        'staff_activity_subtitle': 'Staff con mayor número de ofertas creadas en los últimos 30 días',
+        'staff_activity_offers_window': 'ofertas (30 días)',
+        'staff_activity_total': 'totales',
+        'no_staff_activity_data': 'No hay datos de actividad de staff disponibles',
       },
       'en': {
         'settings': 'Settings',
@@ -859,6 +866,13 @@ class SettingsState extends ChangeNotifier with WidgetsBindingObserver {
         'offer_lifecycle_min': 'Min days',
         'offer_lifecycle_max': 'Max days',
         'offer_lifecycle_total': 'Closed offers',
+        // ── BQ17 (Guillermo Hernández) ─ Staff Activity Leaderboard ──
+        'staff_activity': 'Staff Activity',
+        'staff_activity_title': 'Active Staff Ranking',
+        'staff_activity_subtitle': 'Staff with the most offers created in the last 30 days',
+        'staff_activity_offers_window': 'offers (30 days)',
+        'staff_activity_total': 'total',
+        'no_staff_activity_data': 'No staff activity data available',
       }
     };
 

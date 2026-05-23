@@ -12,6 +12,7 @@ import 'gpa_dashboard_page.dart';
 import 'gpa_high_rate_page.dart';
 import 'insights_page.dart';
 import 'offer_lifecycle_screen.dart';
+import 'staff_activity_page.dart';
 import 'status_distribution_page.dart';
 import 'top_applicants_page.dart';
 
@@ -29,10 +30,10 @@ class _AnalyticsShellState extends State<AnalyticsShell>
   @override
   void initState() {
     super.initState();
-    _controller = TabController(length: 8, vsync: this);
+    _controller = TabController(length: 9, vsync: this);
     _controller.addListener(_handleTabChange);
-    // Multi-threading: Future.wait lanza ambas peticiones HTTP simultáneamente
-    // sin bloquear el UI thread, reduciendo el tiempo total de carga.
+    // Multi-threading: Future.wait lanza todas las peticiones HTTP en paralelo
+    // sin bloquear el UI thread, reduciendo el tiempo total de carga inicial.
     _prefetchGuillermosData();
   }
 
@@ -48,6 +49,7 @@ class _AnalyticsShellState extends State<AnalyticsShell>
         ApiService.getGpaHighRate(),          // BQ9
         ApiService.getStatusDistribution(),   // BQ13 — pre-warm cache on shell load
         ApiService.getOfferLifecycle(),       // BQ11 — warm LRU cache in parallel
+        ApiService.getStaffActivity(),        // BQ17 — Guillermo Hernández Sprint 4
       ]);
     } catch (_) {
       // Errors handled individually by each page's own cache-first logic.
@@ -106,6 +108,10 @@ class _AnalyticsShellState extends State<AnalyticsShell>
       _AnalyticsTabMeta(
         label: context.t('offer_lifecycle'),
         icon: Icons.timeline_rounded,
+      ),
+      _AnalyticsTabMeta(
+        label: context.t('staff_activity'),
+        icon: Icons.leaderboard_rounded,
       ),
     ];
 
@@ -182,6 +188,7 @@ class _AnalyticsShellState extends State<AnalyticsShell>
                 ApplicationsPerSemesterPage(),
                 StatusDistributionPage(),
                 OfferLifecycleScreen(),
+                StaffActivityLeaderboardScreen(), // BQ17 — Guillermo Sprint 4
               ],
             ),
           ),

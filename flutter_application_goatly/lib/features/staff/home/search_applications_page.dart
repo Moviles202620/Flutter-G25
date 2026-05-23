@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -24,6 +25,17 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
   String? _error;
   bool _searched = false;
 
+  // ── Micro-optimization: 500 ms debounce (Guillermo Hernández — Sprint 4) ──
+  // BEFORE: onChanged fired _search() on every keystroke.
+  //   Typing "ingenieria" (9 chars) → 9 consecutive HTTP calls + 9 full
+  //   widget-tree rebuilds. CPU flame chart showed a solid wall of blue blocks.
+  //
+  // AFTER: onChanged schedules a Timer(500 ms). Each new keystroke cancels the
+  //   previous timer, so _search() fires only once — 500 ms after the user
+  //   stops typing. Result: 1 HTTP call instead of 9, and 1 rebuild instead of 9.
+  //   CPU flame chart shows large idle gaps during typing and a single event at end.
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
@@ -32,6 +44,7 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel(); // prevent timer firing after widget is gone
     _queryCtrl.dispose();
     super.dispose();
   }
@@ -88,8 +101,27 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
     }
   }
 
+  // ── Debounced live-search handler ────────────────────────────────────────
+  // Called by onChanged on every keystroke. Cancels the previous timer and
+  // starts a new 500 ms countdown. _search() only executes when the user
+  // pauses typing for at least 500 ms — eliminating redundant HTTP calls.
+  void _onSearchChanged(String value) {
+    // Always rebuild to show/hide the clear (×) button immediately.
+    setState(() {});
+
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      // Only trigger live-search when there is actual text — avoids an
+      // automatic empty-query fetch every time the field is cleared.
+      if (_queryCtrl.text.trim().isNotEmpty) {
+        _search();
+      }
+    });
+  }
+
   void _fillAndSearch(String query) {
     _queryCtrl.text = query;
+    _debounce?.cancel(); // skip debounce — user tapped a history chip
     _search();
   }
 
@@ -146,7 +178,10 @@ class _SearchApplicationsPageState extends State<SearchApplicationsPage> {
                       borderSide: BorderSide.none,
                     ),
                   ),
-                  onChanged: (_) => setState(() {}),
+                  // Micro-optimization: debounced via _onSearchChanged (500 ms timer).
+                  // Replaces the previous setState-only handler with a debounced
+                  // live-search that fires _search() after the user stops typing.
+                  onChanged: _onSearchChanged,
                 ),
                 const SizedBox(height: 10),
                 Row(
