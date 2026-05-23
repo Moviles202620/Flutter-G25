@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "226407464568",
+    "project_id": "goatly-g25--flutter",
+    "storage_bucket": "goatly-g25--flutter.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:226407464568:android:b1c04b9c42e56922ccb78d",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_goatly"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2yyYtAoJAt2xqr9y4D1qHg3La1RNAPc0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:226407464568:android:9245743b5382402eccb78d",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_goatly_Sprint4"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2yyYtAoJAt2xqr9y4D1qHg3La1RNAPc0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
