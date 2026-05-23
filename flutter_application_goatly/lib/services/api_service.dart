@@ -537,6 +537,29 @@ class ApiService {
     }
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
+
+  // ── BQ17 (Guillermo Hernández) ─ Staff Activity Leaderboard ─────────────
+
+  /// GET /analytics/staff-activity?days=30
+  /// BQ17: Staff ranked by number of offers created in the last [days] days.
+  /// Returns list of {staff_id, staff_name, department, offers_in_window, total_offers}.
+  static Future<List<Map<String, dynamic>>> getStaffActivity({
+    int days = 30,
+  }) async {
+    final uri = Uri.parse('$baseUrl/analytics/staff-activity')
+        .replace(queryParameters: {'days': days.toString()});
+
+    final res = await http
+        .get(uri, headers: _headers)
+        .timeout(const Duration(seconds: 10));
+
+    if (res.statusCode != 200) {
+      throw ApiException(
+          'Error al obtener actividad de staff (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list.cast<Map<String, dynamic>>();
+  }
 }
 
 class ApiException implements Exception {
